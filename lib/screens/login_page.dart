@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:truthliesdetector/screens/home_page.dart';
+import 'package:truthliesdetector/screens/register_page.dart';
 
 const _sage = Color(0xFF9EB79E);
 const _sageDeep = Color(0xFF8EAA98);
@@ -6,6 +8,7 @@ const _sageDeep = Color(0xFF8EAA98);
 class LoginPage extends StatefulWidget {
   static const route = '/login';
   const LoginPage({super.key});
+
   @override
   State<LoginPage> createState() => _LoginPageState();
 }
@@ -112,8 +115,11 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                         padding: const EdgeInsets.symmetric(vertical: 14),
                       ),
-                      onPressed: () =>
-                          Navigator.pushReplacementNamed(context, '/home'),
+                      onPressed: () {
+                        // 按登入 → 跳轉 HomePage
+                        Navigator.pushReplacementNamed(
+                            context, HomePage.route);
+                      },
                       child: const Text('登入'),
                     ),
                     const SizedBox(height: 8),
@@ -122,8 +128,11 @@ class _LoginPageState extends State<LoginPage> {
                       style: TextButton.styleFrom(
                         foregroundColor: Colors.black,
                       ),
-                      onPressed: () => Navigator.pushReplacementNamed(
-                          context, '/register'),
+                      onPressed: () {
+                        // 按「我要註冊」 → 跳轉 RegisterPage
+                        Navigator.pushReplacementNamed(
+                            context, RegisterPage.route);
+                      },
                       child: const Text('我要註冊'),
                     ),
                   ]),

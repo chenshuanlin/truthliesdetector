@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:truthliesdetector/screens/splash_page.dart';
 
 const _sage = Color(0xFF9EB79E);
 const _sageDeep = Color(0xFF8EAA98);
@@ -140,14 +141,17 @@ class _ProfilePageState extends State<ProfilePage> {
                 // 登出按鈕（#D85E5E）
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFD85E5E), // 新顏色
+                    backgroundColor: const Color(0xFFD85E5E),
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
                     padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
-                  onPressed: () {},
+                  onPressed: () {
+                    // 登出 → 回 SplashPage
+                    Navigator.pushReplacementNamed(context, SplashPage.route);
+                  },
                   child: const Text('登出'),
                 ),
               ],

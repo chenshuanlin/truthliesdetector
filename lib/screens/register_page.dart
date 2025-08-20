@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:truthliesdetector/screens/home_page.dart';
+import 'package:truthliesdetector/screens/login_page.dart';
 
 const _sage = Color(0xFF9EB79E);
 const _sageDeep = Color(0xFF8EAA98);
@@ -6,6 +8,7 @@ const _sageDeep = Color(0xFF8EAA98);
 class RegisterPage extends StatefulWidget {
   static const route = '/register';
   const RegisterPage({super.key});
+
   @override
   State<RegisterPage> createState() => _RegisterPageState();
 }
@@ -46,7 +49,7 @@ class _RegisterPageState extends State<RegisterPage> {
             const SizedBox(height: 24),
             // 上方 Logo
             Image.asset(
-              'lib/assets/logo.png', // 你的 logo 路徑
+              'lib/assets/logo.png',
               width: 80,
               height: 80,
             ),
@@ -135,19 +138,24 @@ class _RegisterPageState extends State<RegisterPage> {
                         padding: const EdgeInsets.symmetric(vertical: 14),
                       ),
                       onPressed: _agree
-                          ? () => Navigator.pushReplacementNamed(
-                              context, '/home')
+                          ? () {
+                              // 註冊完成 → 跳到 HomePage
+                              Navigator.pushReplacementNamed(
+                                  context, HomePage.route);
+                            }
                           : null,
                       child: const Text('註冊'),
                     ),
                     const SizedBox(height: 8),
-                    // 已有帳號（黑色文字）
+                    // 已有帳號 → 回登入
                     TextButton(
                       style: TextButton.styleFrom(
                         foregroundColor: Colors.black,
                       ),
-                      onPressed: () => Navigator.pushReplacementNamed(
-                          context, '/login'),
+                      onPressed: () {
+                        Navigator.pushReplacementNamed(
+                            context, LoginPage.route);
+                      },
                       child: const Text('已有帳號？前往登入'),
                     ),
                   ],
