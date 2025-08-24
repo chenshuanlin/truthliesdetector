@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'Article_page.dart'; // ✅ 改成你的 ArticleDetailPage 檔案
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -77,37 +78,47 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               borderRadius: BorderRadius.circular(16),
             ),
             elevation: 2,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: mainGreen.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(8),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(16),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const ArticleDetailPage()),
+                );
+              },
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: mainGreen.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text("#1",
+                              style:
+                              TextStyle(color: mainGreen, fontSize: 14)),
                         ),
-                        child: Text("#1",
-                            style: TextStyle(color: mainGreen, fontSize: 14)),
-                      ),
-                      const SizedBox(width: 8),
-                      const Expanded(
-                        child: Text("全球經濟議題",
-                            style: TextStyle(
-                                fontSize: 16, fontWeight: FontWeight.bold)),
-                      )
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    "支持可持續發展的政策，多家國際組織共同發表聲明。",
-                    style: TextStyle(color: Colors.black54, fontSize: 14),
-                  ),
-                ],
+                        const SizedBox(width: 8),
+                        const Expanded(
+                          child: Text("全球經濟議題",
+                              style: TextStyle(
+                                  fontSize: 16, fontWeight: FontWeight.bold)),
+                        )
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      "支持可持續發展的政策，多家國際組織共同發表聲明。",
+                      style: TextStyle(color: Colors.black54, fontSize: 14),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -210,7 +221,17 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       itemCount: items.length,
       separatorBuilder: (context, index) => const SizedBox(width: 12),
       itemBuilder: (context, index) {
-        return _buildRecommendCard(items[index]["title"]!, items[index]["count"]!);
+        return InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ArticleDetailPage()),
+            );
+          },
+          child: _buildRecommendCard(
+              items[index]["title"]!, items[index]["count"]!),
+        );
       },
     );
   }
@@ -229,7 +250,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         children: [
           Text(title,
               style: const TextStyle(
-                  fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black54)),
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black54)),
           const Spacer(),
           Text(count, style: const TextStyle(color: Colors.black54)),
         ],
@@ -244,6 +267,12 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       elevation: 1,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: ListTile(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const ArticleDetailPage()),
+          );
+        },
         leading: Container(
           width: 14,
           height: 14,
