@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'Article_page.dart'; // ✅ 改成你的 ArticleDetailPage 檔案
+import 'Article_page.dart'; // ✅ 文章細節頁面
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -25,12 +25,22 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: bgGrey,
+
+      // ✅ 加上 Drawer
+      drawer: _buildDrawer(),
+
       appBar: AppBar(
         backgroundColor: mainGreen,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.menu, color: Colors.white),
-          onPressed: () {},
+        leading: Builder(
+          builder: (context) {
+            return IconButton(
+              icon: const Icon(Icons.menu, color: Colors.white),
+              onPressed: () {
+                Scaffold.of(context).openDrawer(); // 打開 Drawer
+              },
+            );
+          },
         ),
         actions: [
           IconButton(
@@ -43,7 +53,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // 搜尋框
+          // 🔍 搜尋框
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
@@ -69,7 +79,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
           const SizedBox(height: 24),
 
-          // 熱門趨勢
+          // 🔥 熱門趨勢
           const Text("熱門趨勢",
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
@@ -125,17 +135,16 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
           const SizedBox(height: 24),
 
-          // 為您推薦 + Tab
+          // 🎯 為您推薦 + Tab
           const Text("為您推薦",
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
 
-          // TabBar
           TabBar(
             controller: _tabController,
             labelColor: mainGreen,
             unselectedLabelColor: Colors.grey,
-            indicatorColor: Colors.transparent, // 去掉下劃線
+            indicatorColor: Colors.transparent,
             labelStyle:
             const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             unselectedLabelStyle:
@@ -148,7 +157,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           ),
           const SizedBox(height: 12),
 
-          // TabBarView 對應的推薦卡片
           SizedBox(
             height: 180,
             child: TabBarView(
@@ -172,7 +180,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
           const SizedBox(height: 24),
 
-          // 今日排行榜
+          // 🏆 今日排行榜
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -191,26 +199,65 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         ],
       ),
 
-      // 底部導航列
-      bottomNavigationBar: BottomNavigationBar(
-        backgroundColor: mainGreen,
+      // ⬇️ 自訂導覽列
+      bottomNavigationBar: CustomBottomNavBar(
         currentIndex: _selectedIndex,
         onTap: (index) {
           setState(() {
             _selectedIndex = index;
           });
         },
-        type: BottomNavigationBarType.fixed,
-        selectedItemColor: Colors.white,
-        unselectedItemColor: Colors.white70,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: "首頁"),
-          BottomNavigationBarItem(icon: Icon(Icons.article), label: "新聞"),
-          BottomNavigationBarItem(icon: Icon(Icons.explore), label: "發現"),
-          BottomNavigationBarItem(icon: Icon(Icons.message), label: "訊息"),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: "我的"),
-        ],
       ),
+    );
+  }
+
+  /// 側邊 Drawer
+  Widget _buildDrawer() {
+    return Drawer(
+      backgroundColor: mainGreen,
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // LOGO
+              Center(
+                child: Column(
+                  children: [
+                    Image.asset(
+                      "logo.png", // ✅ 你的 logo 圖片
+                      height: 60,
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // 功能選單
+              _buildDrawerItem(Icons.home, "首頁"),
+              _buildDrawerItem(Icons.fiber_new, "最新消息"),
+              _buildDrawerItem(Icons.search, "新聞搜尋"),
+              _buildDrawerItem(Icons.smart_toy, "AI助手"),
+              _buildDrawerItem(Icons.person, "用戶資訊"),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDrawerItem(IconData icon, String text) {
+    return ListTile(
+      leading: Icon(icon, color: Colors.white),
+      title: Text(
+        text,
+        style: const TextStyle(color: Colors.white, fontSize: 16),
+      ),
+      onTap: () {
+        Navigator.pop(context); // 點擊後關閉 Drawer
+      },
     );
   }
 
@@ -283,6 +330,93 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
         subtitle: Text(subtitle, style: const TextStyle(color: Colors.black54)),
         trailing: const Icon(Icons.bookmark_border),
+      ),
+    );
+  }
+}
+
+/// ⬇️ 自訂導覽列 Widget
+class CustomBottomNavBar extends StatelessWidget {
+  final int currentIndex;
+  final Function(int) onTap;
+
+  const CustomBottomNavBar({
+    super.key,
+    required this.currentIndex,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    Color mainGreen = const Color(0xFF8BA88E);
+
+    return Container(
+      height: 80,
+      decoration: BoxDecoration(
+        color: mainGreen,
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(30),
+          topRight: Radius.circular(30),
+        ),
+      ),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          // 左右四個選項
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildNavItem(Icons.home, "首頁", 0, mainGreen),
+              _buildNavItem(Icons.access_time, "發現", 1, mainGreen),
+              const SizedBox(width: 60), // 中間空出位置
+              _buildNavItem(Icons.search, "搜尋", 3, mainGreen),
+              _buildNavItem(Icons.person, "我的", 4, mainGreen),
+            ],
+          ),
+
+          // 中間凸起的圓形按鈕
+          Positioned(
+            top: -25,
+            left: MediaQuery.of(context).size.width / 2 - 45,
+            child: GestureDetector(
+              onTap: () => onTap(2), // index = 2
+              child: Container(
+                width: 90,
+                height: 90,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: mainGreen, width: 4),
+                ),
+                child: Center(
+                  child: Icon(Icons.gpp_maybe, color: mainGreen, size: 40),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNavItem(IconData icon, String label, int index, Color mainGreen) {
+    bool isSelected = currentIndex == index;
+    return GestureDetector(
+      onTap: () => onTap(index),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, color: Colors.white, size: 24),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.white,
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            ),
+          ),
+        ],
       ),
     );
   }
