@@ -50,8 +50,8 @@ class _ProfilePageState extends State<ProfilePage> {
                       const Spacer(),
                       Image.asset(
                         'lib/assets/logo.png',
-                        width: 36,
-                        height: 36,
+                        width: 45,
+                        height: 45,
                       ),
                     ],
                   ),

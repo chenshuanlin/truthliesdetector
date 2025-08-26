@@ -31,8 +31,8 @@ class _HomePageState extends State<HomePage> {
             padding: const EdgeInsets.only(right: 12),
             child: Image.asset(
               'lib/assets/logo.png', // 請改成你的 logo 路徑
-              width: 36,
-              height: 36,
+              width: 45,
+              height: 45,
             ),
           ),
         ],
