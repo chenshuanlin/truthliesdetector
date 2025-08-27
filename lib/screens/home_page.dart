@@ -19,6 +19,9 @@ class _HomePageState extends State<HomePage> {
   ];
   final selected = <String>{'政治'};
 
+  bool showMoreTrends = false; // 🔹 控制「熱門趨勢」展開
+  bool showMoreAnalytics = false; // 🔹 控制「大數據分析」展開
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -60,27 +63,27 @@ class _HomePageState extends State<HomePage> {
                 ),
                 const SizedBox(height: 20),
                 ListTile(
-                  contentPadding: const EdgeInsets.only(left: 30),
+                  contentPadding: const EdgeInsets.only(left: 50),
                   title: const Text('首頁', style: TextStyle(color: Colors.white)),
                   onTap: () => Navigator.pop(context),
                 ),
                 ListTile(
-                  contentPadding: const EdgeInsets.only(left: 30),
+                  contentPadding: const EdgeInsets.only(left: 50),
                   title: const Text('最新消息', style: TextStyle(color: Colors.white)),
                   onTap: () => Navigator.pop(context),
                 ),
                 ListTile(
-                  contentPadding: const EdgeInsets.only(left: 30),
+                  contentPadding: const EdgeInsets.only(left: 50),
                   title: const Text('新聞搜尋', style: TextStyle(color: Colors.white)),
                   onTap: () => Navigator.pop(context),
                 ),
                 ListTile(
-                  contentPadding: const EdgeInsets.only(left: 30),
+                  contentPadding: const EdgeInsets.only(left: 50),
                   title: const Text('AI助手', style: TextStyle(color: Colors.white)),
                   onTap: () => Navigator.pop(context),
                 ),
                 ListTile(
-                  contentPadding: const EdgeInsets.only(left: 30),
+                  contentPadding: const EdgeInsets.only(left: 50),
                   title: const Text('用戶資訊', style: TextStyle(color: Colors.white)),
                   onTap: () {
                     Navigator.pop(context);
@@ -139,56 +142,70 @@ class _HomePageState extends State<HomePage> {
             }).toList(),
           ),
           const SizedBox(height: 20),
-          _SectionHeader(title: '熱門趨勢', onMore: () {}),
+
+          // 🔹 熱門趨勢
+          _SectionHeader(
+            title: '熱門趨勢',
+            onMore: () {
+              setState(() {
+                showMoreTrends = !showMoreTrends;
+              });
+            },
+          ),
           Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 8,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: _sageDeep,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '健康資訊瀏覽量上升',
-                          style: TextStyle(
-                              fontWeight: FontWeight.w700, fontSize: 16),
-                        ),
-                        SizedBox(height: 6),
-                        Text(
-                          '近 24 小時內關於「保健食品」的搜尋與分享次數上升 300%。可能存在行銷話術集中傳播。',
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  const Chip(label: Text('高風險')),
-                ],
-              ),
+            child: ListTile(
+              title: const Text('健康資訊瀏覽量上升'),
+              subtitle: const Text('近 24 小時內關於「保健食品」的搜尋與分享次數上升 300%。'),
+              trailing: const Chip(label: Text('高風險')),
             ),
           ),
+          if (showMoreTrends) ...[
+            Card(
+              child: ListTile(
+                title: const Text('政治議題討論度飆升'),
+                subtitle: const Text('選舉相關假新聞在社群平台廣傳。'),
+                trailing: const Chip(label: Text('中風險')),
+              ),
+            ),
+            Card(
+              child: ListTile(
+                title: const Text('環境議題快速擴散'),
+                subtitle: const Text('近期「減碳政策」相關假訊息數量增加。'),
+                trailing: const Chip(label: Text('高風險')),
+              ),
+            ),
+          ],
+
           const SizedBox(height: 8),
-          _SectionHeader(title: '大數據分析', onMore: () {}),
+
+          // 🔹 大數據分析
+          _SectionHeader(
+            title: '大數據分析',
+            onMore: () {
+              setState(() {
+                showMoreAnalytics = !showMoreAnalytics;
+              });
+            },
+          ),
           Wrap(
             spacing: 12,
             runSpacing: 12,
             children: const [
               _MiniCard(title: '輿情來源分析', subtitle: '各平台文章比例'),
               _MiniCard(title: '退稿率走勢', subtitle: '本週被澄清趨勢'),
-              _MiniCard(title: '輿情議題分析', subtitle: '主題分佈'),
-              _MiniCard(title: '假訊息來源分析', subtitle: '來源型態'),
             ],
           ),
+          if (showMoreAnalytics) ...[
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: const [
+                _MiniCard(title: '輿情議題分析', subtitle: '主題分佈'),
+                _MiniCard(title: '假訊息來源分析', subtitle: '來源型態'),
+              ],
+            ),
+          ],
+
           const SizedBox(height: 24),
         ],
       ),
