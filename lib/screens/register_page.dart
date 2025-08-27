@@ -82,7 +82,7 @@ class _RegisterPageState extends State<RegisterPage> {
                 ),
                 padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
                 child: Form(
-                  key: _formKey, // ✅ 表單 key
+                  key: _formKey,
                   child: SingleChildScrollView(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -149,8 +149,11 @@ class _RegisterPageState extends State<RegisterPage> {
                         TextFormField(
                           controller: _email,
                           decoration: _input('電子郵件'),
-                          validator: (v) =>
-                              v == null || v.isEmpty ? '請輸入電子郵件' : null,
+                          validator: (v) {
+                            if (v == null || v.isEmpty) return '請輸入電子郵件';
+                            if (!v.contains('@')) return '請輸入有效的電子郵件';
+                            return null;
+                          },
                         ),
                         const SizedBox(height: 12),
 
@@ -158,8 +161,14 @@ class _RegisterPageState extends State<RegisterPage> {
                         TextFormField(
                           controller: _phone,
                           decoration: _input('電話號碼'),
-                          validator: (v) =>
-                              v == null || v.isEmpty ? '請輸入電話號碼' : null,
+                          validator: (v) {
+                            if (v == null || v.isEmpty) return '請輸入電話號碼';
+                            if (!RegExp(r'^[0-9]+$').hasMatch(v)) {
+                              return '電話號碼只能是數字';
+                            }
+                            if (v.length < 10) return '電話號碼至少需要 10 碼';
+                            return null;
+                          },
                         ),
                         const SizedBox(height: 8),
 

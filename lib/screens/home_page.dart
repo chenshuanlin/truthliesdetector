@@ -114,7 +114,7 @@ class _HomePageState extends State<HomePage> {
                     if (isSel) ...[
                       const Icon(
                         Icons.check,
-                        size: 16, // ✅ 細版打勾
+                        size: 16,
                         color: Colors.white,
                       ),
                       const SizedBox(width: 4),
@@ -129,7 +129,7 @@ class _HomePageState extends State<HomePage> {
                 labelPadding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
                 selected: isSel,
-                showCheckmark: false, // ❌ 關閉預設粗勾
+                showCheckmark: false,
                 selectedColor: _sage,
                 backgroundColor: Colors.white,
                 side: const BorderSide(color: _sage),
