@@ -13,8 +13,10 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  final filters = ['科技', '政治', '健康', '教育', '娛樂', '體育', '設計', '旅遊', '生活', '商業',
-    '金融', '環境', '國際', '藝術', '社會', '研究', '美食', '影視'];
+  final filters = [
+    '科技', '政治', '健康', '教育', '娛樂', '體育', '設計', '旅遊', '生活', '商業',
+    '金融', '環境', '國際', '藝術', '社會', '研究', '美食', '影視'
+  ];
   final selected = <String>{'政治'};
 
   @override
@@ -103,19 +105,29 @@ class _HomePageState extends State<HomePage> {
             children: filters.map((f) {
               final isSel = selected.contains(f);
               return ChoiceChip(
-                label: Text(
-                  f,
-                  textAlign: TextAlign.center,
+                label: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (isSel) ...[
+                      const Icon(
+                        Icons.check,
+                        size: 16, // ✅ 細版打勾
+                        color: Colors.white,
+                      ),
+                      const SizedBox(width: 4),
+                    ],
+                    Text(f),
+                  ],
                 ),
                 labelStyle: TextStyle(
                   color: isSel ? Colors.white : _sage,
                   height: 1.2,
                 ),
-                labelPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                labelPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
                 selected: isSel,
-                showCheckmark: true,         // ✅ 顯示打勾
-                checkmarkColor: Colors.white, // ✅ 打勾顏色白色
-                selectedColor: _sage,        // ✅ 選中底色 #9EB79E
+                showCheckmark: false, // ❌ 關閉預設粗勾
+                selectedColor: _sage,
                 backgroundColor: Colors.white,
                 side: const BorderSide(color: _sage),
                 onSelected: (_) {

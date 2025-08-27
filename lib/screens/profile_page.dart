@@ -19,6 +19,64 @@ class _ProfilePageState extends State<ProfilePage> {
   ];
   final selected = <String>{'科技', '健康', '社會'};
 
+  // 🔹 用戶資料
+  String userName = '中小原';
+  String userEmail = 'cycuim@gmail.com';
+
+  // 🔹 編輯用的 controller
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    super.dispose();
+  }
+
+  void _editProfile() {
+    _nameController.text = userName;
+    _emailController.text = userEmail;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('編輯資料'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _nameController,
+                decoration: const InputDecoration(labelText: '姓名'),
+              ),
+              TextField(
+                controller: _emailController,
+                decoration: const InputDecoration(labelText: '電子郵件'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('取消'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                setState(() {
+                  userName = _nameController.text;
+                  userEmail = _emailController.text;
+                });
+                Navigator.pop(context);
+              },
+              child: const Text('儲存'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -66,23 +124,23 @@ class _ProfilePageState extends State<ProfilePage> {
                     const CircleAvatar(
                         radius: 28, backgroundColor: Colors.white),
                     const SizedBox(width: 12),
-                    const Expanded(
+                    Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('中小原',
-                              style: TextStyle(
+                          Text(userName,
+                              style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 18,
                                   fontWeight: FontWeight.w700)),
-                          SizedBox(height: 4),
-                          Text('cycuim@gmail.com',
-                              style: TextStyle(color: Colors.white70)),
+                          const SizedBox(height: 4),
+                          Text(userEmail,
+                              style: const TextStyle(color: Colors.white70)),
                         ],
                       ),
                     ),
                     TextButton(
-                      onPressed: () {},
+                      onPressed: _editProfile, // 🔹 打開編輯對話框
                       style: TextButton.styleFrom(foregroundColor: Colors.white),
                       child: const Text('編輯資料'),
                     ),
@@ -113,9 +171,33 @@ class _ProfilePageState extends State<ProfilePage> {
                           children: [
                             for (final t in tags)
                               ChoiceChip(
-                                label: Text(t),
+                                label: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (selected.contains(t)) ...[
+                                      const Icon(
+                                        Icons.check,
+                                        size: 16, // 細版勾勾
+                                        color: Colors.white, // ✅ 改成白色
+                                      ),
+                                      const SizedBox(width: 4),
+                                    ],
+                                    Text(t),
+                                  ],
+                                ),
+                                labelStyle: TextStyle(
+                                  color: selected.contains(t)
+                                      ? Colors.white
+                                      : _sage,
+                                  height: 1.2,
+                                ),
+                                labelPadding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 2),
                                 selected: selected.contains(t),
+                                showCheckmark: false, // ❌ 關掉預設黑勾
                                 selectedColor: _sageDeep,
+                                backgroundColor: Colors.white,
+                                side: const BorderSide(color: _sage),
                                 onSelected: (_) {
                                   setState(() {
                                     if (selected.contains(t)) {
