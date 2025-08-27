@@ -1,18 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:truthliesdetector/screens/profile_page.dart';
 
-const _sage = Color(0xFF9EB79E);
+const _sage = Color(0xFF9EB79E); // 綠底色
 const _sageDeep = Color(0xFF8EAA98);
 
 class HomePage extends StatefulWidget {
   static const route = '/home';
   const HomePage({super.key});
+
   @override
   State<HomePage> createState() => _HomePageState();
 }
 
 class _HomePageState extends State<HomePage> {
-  final filters = ['新聞', '社群', '影片', '關鍵名'];
-  final selected = <String>{'新聞'};
+  final filters = ['科技', '政治', '健康', '教育', '娛樂', '體育', '設計', '旅遊', '生活', '商業',
+    '金融', '環境', '國際', '藝術', '社會', '研究', '美食', '影視'];
+  final selected = <String>{'政治'};
 
   @override
   Widget build(BuildContext context) {
@@ -30,62 +33,98 @@ class _HomePageState extends State<HomePage> {
           Padding(
             padding: const EdgeInsets.only(right: 12),
             child: Image.asset(
-              'lib/assets/logo.png', // 請改成你的 logo 路徑
+              'lib/assets/logo.png',
               width: 45,
               height: 45,
             ),
           ),
         ],
       ),
-      drawer: const Drawer(
-        child: SafeArea(
-          child: ListTile(
-            leading: Icon(Icons.home_outlined),
-            title: Text('首頁'),
+
+      // 🔹 側邊欄 Drawer
+      drawer: Drawer(
+        child: Container(
+          color: _sage,
+          child: SafeArea(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(left: 16, top: 24, bottom: 16),
+                  child: Image.asset(
+                    'lib/assets/logo.png',
+                    width: 120,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                ListTile(
+                  contentPadding: const EdgeInsets.only(left: 30),
+                  title: const Text('首頁', style: TextStyle(color: Colors.white)),
+                  onTap: () => Navigator.pop(context),
+                ),
+                ListTile(
+                  contentPadding: const EdgeInsets.only(left: 30),
+                  title: const Text('最新消息', style: TextStyle(color: Colors.white)),
+                  onTap: () => Navigator.pop(context),
+                ),
+                ListTile(
+                  contentPadding: const EdgeInsets.only(left: 30),
+                  title: const Text('新聞搜尋', style: TextStyle(color: Colors.white)),
+                  onTap: () => Navigator.pop(context),
+                ),
+                ListTile(
+                  contentPadding: const EdgeInsets.only(left: 30),
+                  title: const Text('AI助手', style: TextStyle(color: Colors.white)),
+                  onTap: () => Navigator.pop(context),
+                ),
+                ListTile(
+                  contentPadding: const EdgeInsets.only(left: 30),
+                  title: const Text('用戶資訊', style: TextStyle(color: Colors.white)),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.pushNamed(context, ProfilePage.route);
+                  },
+                ),
+              ],
+            ),
           ),
         ),
       ),
+
+      // 🔹 主體內容
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          const Text('探索', style: TextStyle(fontSize: 16)),
+          const Text('興趣標籤', style: TextStyle(fontSize: 16)),
           const SizedBox(height: 8),
-          TextField(
-            decoration: InputDecoration(
-              hintText: '搜尋假新聞議題、關鍵字…',
-              prefixIcon: const Icon(Icons.search),
-              filled: true,
-              fillColor: const Color(0xFFF7F8F7),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
-              ),
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-            ),
-            onSubmitted: (_) {},
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            height: 40,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: filters.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 8),
-              itemBuilder: (_, i) {
-                final f = filters[i];
-                final isSel = selected.contains(f);
-                return ChoiceChip(
-                  label: Text(f),
-                  selected: isSel,
-                  onSelected: (_) {
-                    setState(() {
-                      isSel ? selected.remove(f) : selected.add(f);
-                    });
-                  },
-                );
-              },
-            ),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: filters.map((f) {
+              final isSel = selected.contains(f);
+              return ChoiceChip(
+                label: Text(
+                  f,
+                  textAlign: TextAlign.center,
+                ),
+                labelStyle: TextStyle(
+                  color: isSel ? Colors.white : _sage,
+                  height: 1.2,
+                ),
+                labelPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                selected: isSel,
+                showCheckmark: true,         // ✅ 顯示打勾
+                checkmarkColor: Colors.white, // ✅ 打勾顏色白色
+                selectedColor: _sage,        // ✅ 選中底色 #9EB79E
+                backgroundColor: Colors.white,
+                side: const BorderSide(color: _sage),
+                onSelected: (_) {
+                  setState(() {
+                    isSel ? selected.remove(f) : selected.add(f);
+                  });
+                },
+              );
+            }).toList(),
           ),
           const SizedBox(height: 20),
           _SectionHeader(title: '熱門趨勢', onMore: () {}),
