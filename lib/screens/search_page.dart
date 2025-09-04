@@ -14,7 +14,7 @@ class _SearchPageState extends State<SearchPage> {
   String selectedCategory = "";
   TextEditingController keywordController = TextEditingController();
 
-  // BottomNavigationBar 狀態
+  // 導覽列狀態
   int _selectedIndex = 0;
 
   // 主綠色
@@ -60,10 +60,10 @@ class _SearchPageState extends State<SearchPage> {
           article["title"]!
               .toLowerCase()
               .contains(keywordController.text.toLowerCase());
-      bool matchCredibility = selectedConfidence.isEmpty ||
-          article["credibility"] == selectedConfidence;
-      bool matchCategory = selectedCategory.isEmpty ||
-          article["title"]!.contains(selectedCategory);
+      bool matchCredibility =
+          selectedConfidence.isEmpty || article["credibility"] == selectedConfidence;
+      bool matchCategory =
+          selectedCategory.isEmpty || article["title"]!.contains(selectedCategory);
       bool matchTime = true;
       return matchKeyword && matchCredibility && matchCategory && matchTime;
     }).toList();
@@ -146,7 +146,6 @@ class _SearchPageState extends State<SearchPage> {
                       style: TextStyle(color: credColor, fontSize: 12)),
                 ),
                 const Spacer(),
-                // 空心圓包下箭頭，點擊跳轉完整文章
                 InkWell(
                   onTap: () {
                     Navigator.push(
@@ -181,6 +180,47 @@ class _SearchPageState extends State<SearchPage> {
     );
   }
 
+  // Drawer 按鈕
+  Widget _buildDrawerButton(String label) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {}, // 點擊有回饋
+        child: ListTile(
+          title: Center(
+            child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 18)),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Bottom 導覽列按鈕
+  Widget _buildBottomNavButton(IconData icon, String label) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {}, // 點擊有回饋
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 12.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: Colors.white, size: 24),
+              const SizedBox(height: 2),
+              Text(
+                label,
+                style: const TextStyle(color: Colors.white, fontSize: 12),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -192,33 +232,34 @@ class _SearchPageState extends State<SearchPage> {
     return Scaffold(
       backgroundColor: Colors.white,
 
-      // Drawer
-      drawer: Drawer(
-        backgroundColor: const Color(0xFF9EB79E),
-        child: ListView(
-          padding: EdgeInsets.zero,
-          children: [
-            DrawerHeader(
-              decoration: const BoxDecoration(color: Color(0xFF9EB79E)),
-              child: Align(
-                alignment: Alignment.centerLeft,
+      drawer: SizedBox(
+        width: MediaQuery.of(context).size.width * 0.6,
+        child: Drawer(
+          backgroundColor: mainGreen,
+          child: ListView(
+            padding: const EdgeInsets.only(top: 40),
+            children: [
+              Container(
+                color: mainGreen,
+                height: 160,
+                alignment: Alignment.center,
+                padding: const EdgeInsets.all(16),
                 child: Image.asset(
                   "lib/assets/logo1.png",
-                  height: 80,
+                  height: 120,
                   fit: BoxFit.contain,
                 ),
               ),
-            ),
-            ListTile(title: const Text("首頁", style: TextStyle(color: Colors.white))),
-            ListTile(title: const Text("最新消息", style: TextStyle(color: Colors.white))),
-            ListTile(title: const Text("新聞搜尋", style: TextStyle(color: Colors.white))),
-            ListTile(title: const Text("AI助手", style: TextStyle(color: Colors.white))),
-            ListTile(title: const Text("用戶資訊", style: TextStyle(color: Colors.white))),
-          ],
+              _buildDrawerButton("首頁"),
+              _buildDrawerButton("最新消息"),
+              _buildDrawerButton("新聞搜尋"),
+              _buildDrawerButton("AI助手"),
+              _buildDrawerButton("用戶資訊"),
+            ],
+          ),
         ),
       ),
 
-      // AppBar
       appBar: AppBar(
         backgroundColor: mainGreen,
         elevation: 0,
@@ -228,13 +269,14 @@ class _SearchPageState extends State<SearchPage> {
             onPressed: () => Scaffold.of(context).openDrawer(),
           ),
         ),
-        title: Center(
-          child: Image.asset("lib/assets/logo1.png", height: 40),
+        title: Image.asset(
+          "lib/assets/logo1.png",
+          height: 80,
+          fit: BoxFit.contain,
         ),
-        actions: const [SizedBox(width: 48)],
+        centerTitle: true,
       ),
 
-      // Body
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -265,21 +307,15 @@ class _SearchPageState extends State<SearchPage> {
                 ],
               ),
             ),
-
             const SizedBox(height: 16),
-
-            _buildFilterSection(
-                "可信度篩選", ["高可信度", "中可信度", "低可信度"], selectedConfidence,
+            _buildFilterSection("可信度篩選", ["高可信度", "中可信度", "低可信度"], selectedConfidence,
                     (val) => setState(() => selectedConfidence = val)),
             _buildFilterSection("發布時間", ["今天", "本週", "本月"], selectedTime,
                     (val) => setState(() => selectedTime = val)),
-            _buildFilterSection(
-                "主題類別",
-                ["醫療", "研究", "新聞", "政策", "國際", "科技"],
-                selectedCategory, (val) => setState(() => selectedCategory = val)),
-
+            _buildFilterSection("主題類別",
+                ["醫療", "研究", "新聞", "政策", "國際", "科技"], selectedCategory,
+                    (val) => setState(() => selectedCategory = val)),
             const SizedBox(height: 10),
-
             Row(
               children: [
                 const Text("搜尋結果",
@@ -290,7 +326,6 @@ class _SearchPageState extends State<SearchPage> {
               ],
             ),
             const SizedBox(height: 8),
-
             Expanded(
               child: ListView.builder(
                 itemCount: articles.length,
@@ -303,20 +338,47 @@ class _SearchPageState extends State<SearchPage> {
         ),
       ),
 
-      // BottomNavigationBar
-      bottomNavigationBar: BottomNavigationBar(
-        backgroundColor: mainGreen,
-        currentIndex: _selectedIndex,
-        onTap: (index) => setState(() => _selectedIndex = index),
-        type: BottomNavigationBarType.fixed,
-        selectedItemColor: Colors.white,
-        unselectedItemColor: Colors.white70,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: "首頁"),
-          BottomNavigationBarItem(icon: Icon(Icons.article), label: "新聞"),
-          BottomNavigationBarItem(icon: Icon(Icons.explore), label: "發現"),
-          BottomNavigationBarItem(icon: Icon(Icons.message), label: "訊息"),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: "我的"),
+      bottomNavigationBar: Stack(
+        alignment: Alignment.center,
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            height: 90,
+            decoration: BoxDecoration(
+              color: mainGreen,
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(25),
+                topRight: Radius.circular(25),
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _buildBottomNavButton(Icons.home, "首頁"),
+                _buildBottomNavButton(Icons.access_time, "發現"),
+                const SizedBox(width: 100),
+                _buildBottomNavButton(Icons.search, "搜尋"),
+                _buildBottomNavButton(Icons.person, "我的"),
+              ],
+            ),
+          ),
+          // 中間 logo
+          Positioned(
+            top: -25,
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(50),
+                onTap: () {}, // 點擊有回饋
+                child: Image.asset(
+                  "lib/assets/logo2.png",
+                  width: 100,
+                  height: 100,
+                  fit: BoxFit.contain,
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
