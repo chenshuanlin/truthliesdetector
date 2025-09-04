@@ -185,7 +185,7 @@ class _SearchPageState extends State<SearchPage> {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () {}, // 點擊有回饋
+        onTap: () {},
         child: ListTile(
           title: Center(
             child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 18)),
@@ -200,7 +200,7 @@ class _SearchPageState extends State<SearchPage> {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () {}, // 點擊有回饋
+        onTap: () {},
         borderRadius: BorderRadius.circular(12),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 12.0),
@@ -369,7 +369,7 @@ class _SearchPageState extends State<SearchPage> {
               color: Colors.transparent,
               child: InkWell(
                 borderRadius: BorderRadius.circular(50),
-                onTap: () {}, // 點擊有回饋
+                onTap: () {}, 
                 child: Image.asset(
                   "lib/assets/logo2.png",
                   width: 100,
@@ -420,3 +420,4 @@ class ArticleDetailPage extends StatelessWidget {
     );
   }
 }
+
