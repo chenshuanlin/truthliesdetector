@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'Article_page.dart'; // 引入文章頁面
 
 class CollectPage extends StatefulWidget {
+  static const String route = '/collect'; 
   const CollectPage({super.key});
 
   @override

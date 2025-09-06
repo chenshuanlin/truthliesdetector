@@ -1,92 +1,155 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:http/http.dart' as http; // 導入 http 套件
-import 'dart:convert'; // 導入 json 轉換
-import 'package:truthliesdetector/themes/app_colors.dart'; // 導入自定義顏色
-import 'package:truthliesdetector/screens/AIchat.dart'; // 導入 AIchat 介面
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'dart:io';
 
-class AiAssistantScreen extends StatefulWidget {
-  const AiAssistantScreen({super.key});
+// 假設這些檔案已存在於您的專案中
+import 'package:truthliesdetector/themes/app_colors.dart';
+import 'package:truthliesdetector/screens/AIchat.dart';
+
+class AIacc extends StatefulWidget {
+  static const String route = '/aiacc'; // ✅ route 名稱
+
+  const AIacc({super.key});
 
   @override
-  State<AiAssistantScreen> createState() => _AiAssistantScreenState();
+  State<AIacc> createState() => _AIaccState();
 }
 
-class _AiAssistantScreenState extends State<AiAssistantScreen> {
+class _AIaccState extends State<AIacc> {
   final TextEditingController _textController = TextEditingController();
-  String? _selectedFileName; // 用於顯示選擇的檔案名稱
-  List<Map<String, String>> _historyQueries = []; // 初始化為空列表，等待後端資料載入
-  bool _isLoadingHistory = false; // 新增 loading 狀態
+  String? _selectedFileName;
+  List<Map<String, String>> _historyQueries = [];
+  bool _isLoadingHistory = false;
 
   @override
   void initState() {
     super.initState();
-    _loadHistoryQueries(); // 模擬從後端載入資料
+    _loadHistoryQueries();
+  }
+
+  // 模擬後端歷史查詢 API
+  Future<List<Map<String, String>>> _fetchMockHistory() async {
+    // 模擬網路延遲
+    await Future.delayed(const Duration(seconds: 2));
+
+    // 模擬一個成功的 API 回應
+    final mockResponse = [
+      {
+        'title': '台積電宣布在日本設立新廠',
+        'time': '3小時前',
+        'status': '已查證',
+        'confidence': '高可信度',
+      },
+      {
+        'title': '新冠疫苗含有微型晶片追蹤人體活動',
+        'time': '6小時前',
+        'status': '已查證',
+        'confidence': '低可信度',
+      },
+      {
+        'title': '2024年東京奧運會將取消',
+        'time': '1天前',
+        'status': '已查證',
+        'confidence': '低可信度',
+      },
+      {
+        'title': '某國總統突然辭職並下台',
+        'time': '2天前',
+        'status': '查證中',
+        'confidence': '中可信度',
+      },
+    ];
+
+    return List<Map<String, String>>.from(mockResponse);
   }
 
   Future<void> _loadHistoryQueries() async {
-    setState(() {
-      _isLoadingHistory = true;
-      _historyQueries = [];
-    });
+    if (mounted) {
+      setState(() {
+        _isLoadingHistory = true;
+        _historyQueries = [];
+      });
+    }
 
     try {
-      final response = await http.get(Uri.parse('https://api.example.com/history'));
-
-      if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body);
+      // 使用模擬的 API 函數代替真實的 http 請求
+      final List<Map<String, String>> data = await _fetchMockHistory();
+      if (mounted) {
         setState(() {
-          _historyQueries = data.map((item) => Map<String, String>.from(item)).toList();
+          _historyQueries = data;
         });
-        print('歷史查詢資料載入成功！');
-      } else {
-        print('從後端載入歷史查詢資料失敗，狀態碼: ${response.statusCode}');
       }
     } catch (e) {
-      print('載入歷史查詢資料時發生錯誤: $e');
-    } finally {
-      setState(() {
-        _isLoadingHistory = false;
-      });
-      if (_historyQueries.isEmpty) {
-        // 如果載入失敗，並且沒有資料，使用模擬數據
-        await Future.delayed(const Duration(milliseconds: 500));
+      print('歷史查詢錯誤: $e');
+      if (mounted) {
         setState(() {
-          _historyQueries = [
-            {
-              'title': '台積電宣布在日本設立新廠',
-              'time': '3小時前',
-              'status': '已查證',
-              'confidence': '高可信度',
-            },
-            {
-              'title': '新冠疫苗含有微型晶片追蹤人體活動',
-              'time': '6小時前',
-              'status': '已查證',
-              'confidence': '低可信度',
-            },
-          ];
+          _historyQueries = []; // 設置為空列表以顯示無資料訊息
         });
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingHistory = false);
       }
     }
   }
 
+  // 處理文件選擇
   Future<void> _pickFile() async {
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles();
 
       if (result != null) {
-        setState(() {
-          _selectedFileName = result.files.single.name;
-        });
-        print('選擇的檔案名稱: $_selectedFileName');
+        setState(() => _selectedFileName = result.files.single.name);
       } else {
-        setState(() {
-          _selectedFileName = null;
-        });
+        setState(() => _selectedFileName = null);
       }
     } catch (e) {
       print('檔案選擇錯誤: $e');
+    }
+  }
+
+  // 導航到 AIchat 頁面
+  void _navigateToChat() {
+    String queryMessage = _textController.text.trim();
+    String messageToSend;
+
+    if (_selectedFileName != null && queryMessage.isNotEmpty) {
+      messageToSend = '請查證此訊息："$queryMessage" 並分析檔案: "$_selectedFileName"';
+    } else if (_selectedFileName != null) {
+      messageToSend = '請查證檔案: "$_selectedFileName"';
+    } else if (queryMessage.isNotEmpty) {
+      messageToSend = '請查證此訊息："$queryMessage"';
+    } else {
+      // 如果沒有輸入文字也沒有選擇檔案，可以給一個預設訊息或提示
+      messageToSend = '請查證...';
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AIchat(
+          initialQuery: messageToSend,
+        ),
+      ),
+    );
+
+    // 導航後清空輸入框和選定的檔案
+    _textController.clear();
+    setState(() => _selectedFileName = null);
+  }
+
+  // 取得可信度標籤的顏色
+  Color _getConfidenceColor(String confidence) {
+    switch (confidence) {
+      case '高可信度':
+        return Colors.green.shade700;
+      case '中可信度':
+        return Colors.orange.shade700;
+      case '低可信度':
+      default:
+        return Colors.red.shade700;
     }
   }
 
@@ -102,6 +165,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
       body: SingleChildScrollView(
         child: Column(
           children: [
+            // ✅ 頂部區域 - 介紹與返回按鈕
             Container(
               height: 200,
               decoration: BoxDecoration(
@@ -113,20 +177,14 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
               ),
               child: Stack(
                 children: [
-                  // 修改此處，將箭頭放置在 AppBar 的 leading 位置
                   Align(
                     alignment: Alignment.topLeft,
                     child: Padding(
                       padding: const EdgeInsets.only(top: 40.0, left: 16.0),
                       child: InkWell(
                         onTap: () {
-                          // 確保能正確返回上一頁
                           if (Navigator.of(context).canPop()) {
                             Navigator.of(context).pop();
-                          } else {
-                            // 如果無法返回，可以導航到主頁面
-                            // 例如: Navigator.pushReplacementNamed(context, '/');
-                            print("無法返回，可能是根路由");
                           }
                         },
                         child: const Icon(Icons.arrow_back_ios, color: Colors.white),
@@ -154,6 +212,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                             shape: BoxShape.circle,
                             border: Border.all(color: Colors.white, width: 3),
                           ),
+                          // 注意: 這裡使用了本機圖片，請確保您的 assets 中有此圖片
                           child: Image.asset(
                             'lib/assets/logo2.png',
                             width: 80,
@@ -166,6 +225,8 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                 ],
               ),
             ),
+
+            // ✅ 主要輸入區域
             Padding(
               padding: const EdgeInsets.all(20.0),
               child: Column(
@@ -181,6 +242,8 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                     style: TextStyle(fontSize: 14, color: Colors.grey),
                   ),
                   const SizedBox(height: 20),
+
+                  // ✅ 訊息輸入框
                   Container(
                     decoration: BoxDecoration(
                       color: Colors.white,
@@ -199,11 +262,13 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                       controller: _textController,
                       maxLines: 5,
                       decoration: const InputDecoration.collapsed(
-                        hintText: '  請輸入您要查證的訊息內容或網址... ',
+                        hintText: '  請輸入您要查證的訊息內容或網址... ',
                       ),
                     ),
                   ),
                   const SizedBox(height: 20),
+
+                  // ✅ 上傳檔案區域
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 10),
@@ -222,7 +287,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                     ),
                     child: Column(
                       children: [
-                        const Text('上傳圖片', style: TextStyle(fontSize: 16)),
+                        const Text('上傳圖片/影片', style: TextStyle(fontSize: 16)),
                         const SizedBox(height: 10),
                         if (_selectedFileName != null)
                           Padding(
@@ -247,31 +312,12 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                     ),
                   ),
                   const SizedBox(height: 30),
+
+                  // ✅ 查證按鈕
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: () {
-                        String queryMessage = _textController.text;
-                        if (_selectedFileName != null) {
-                          queryMessage = '請查證此訊息："$queryMessage" 和檔案: "$_selectedFileName"';
-                        } else if (queryMessage.isEmpty) {
-                          queryMessage = '請查證此訊息';
-                        }
-
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => AIcaht(
-                              initialQuery: queryMessage,
-                            ),
-                          ),
-                        );
-
-                        _textController.clear();
-                        setState(() {
-                          _selectedFileName = null;
-                        });
-                      },
+                      onPressed: _navigateToChat,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primaryGreen,
                         foregroundColor: Colors.white,
@@ -288,6 +334,8 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                     ),
                   ),
                   const SizedBox(height: 30),
+
+                  // ✅ 歷史紀錄區塊
                   if (_isLoadingHistory)
                     const Center(child: CircularProgressIndicator())
                   else if (_historyQueries.isEmpty)
@@ -371,7 +419,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                                         Text(
                                           query['confidence']!,
                                           style: TextStyle(
-                                            color: query['confidence'] == '高可信度' ? Colors.green.shade700 : Colors.red.shade700,
+                                            color: _getConfidenceColor(query['confidence']!),
                                             fontSize: 12,
                                             fontWeight: FontWeight.bold,
                                           ),

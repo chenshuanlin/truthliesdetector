@@ -1,99 +1,169 @@
 import 'package:flutter/material.dart';
-import 'package:truthliesdetector/screens/AIacc.dart'; // 導入 AI 辨識介面
-import 'package:truthliesdetector/themes/app_colors.dart'; // 導入自定義顏色
-import 'package:truthliesdetector/themes/app_colors.dart' as app_colors_file; // 導入整個檔案以使用 myCustomGreen
-import 'package:truthliesdetector/screens/ball.dart'; // 導入懸浮球功能
-import 'package:screenshot/screenshot.dart'; // 導入截圖插件
-import 'package:truthliesdetector/themes/bottom.dart'; // 導入底部導航欄文件
-
-// 應用程式的主要進入點
+import 'package:truthliesdetector/screens/login_page.dart';
 import 'package:truthliesdetector/screens/search_page.dart';
-import 'package:truthliesdetector/screens/settings_page.dart';
-import 'package:truthliesdetector/screens/history_page.dart';
 import 'package:truthliesdetector/screens/collect_page.dart';
+import 'package:truthliesdetector/screens/history_page.dart';
+import 'package:truthliesdetector/screens/profile_page.dart';
+import 'package:truthliesdetector/screens/home_page.dart';
+import 'package:truthliesdetector/themes/app_colors.dart';
+import 'package:truthliesdetector/screens/AIchat.dart';
 
 void main() {
   runApp(const MyApp());
 }
 
-// MyApp 是應用程式的根 Widget
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      title: 'Truths and Lies Detector',
+      theme: ThemeData(
+        primaryColor: AppColors.primaryGreen,
+        colorScheme: const ColorScheme.light(
+          primary: AppColors.primaryGreen,
+        ),
+        fontFamily: 'NotoSansSC',
+        useMaterial3: true,
+      ),
+      initialRoute: MainLayout.route,
+      routes: {
+        LoginPage.route: (context) => const LoginPage(),
+        MainLayout.route: (context) => const MainLayout(),
+        SearchPage.route: (context) => const SearchPage(),
+        CollectPage.route: (context) => const CollectPage(),
+        HistoryPage.route: (context) => const HistoryPage(),
+        ProfilePage.route: (context) => const ProfilePage(),
+        AIchat.route: (context) => const AIchat(initialQuery: ''),
+      },
       debugShowCheckedModeBanner: false,
-      home: const HomePage(),
     );
   }
+}
 
-  // 底部導航欄項目點擊事件處理函數
-  void _onBottomBarItemTapped(int index) {
+class MainLayout extends StatefulWidget {
+  static const route = '/main_layout';
+  const MainLayout({super.key});
+
+  @override
+  State<MainLayout> createState() => _MainLayoutState();
+}
+
+class _MainLayoutState extends State<MainLayout> {
+  int _currentIndex = 0;
+
+  // 根據 CustomBottomNavBar 的按鈕順序，調整頁面列表
+  // 按鈕順序為：首頁, 發現, AI助手(中間), 新聞搜尋, 我的
+  final List<Widget> _pages = [
+    const HomePage(),
+    const HistoryPage(), // 使用 HistoryPage 作為 "發現" 頁面
+    const AIchat(initialQuery: ''),
+    const SearchPage(),
+    const ProfilePage(),
+  ];
+
+  void _onItemTapped(int index) {
     setState(() {
       _currentIndex = index;
-    });
-  }
-
-  // 凸起的 AI 按鈕點擊事件處理函數
-  void _onAiButtonTapped() {
-    setState(() {
-      _currentIndex = 2; // 直接切換到 AI 助手頁面
-    });
-  }
-
-  // 懸浮球的開關功能
-  void _toggleFloatingButton() {
-    setState(() {
-      _showFloatingButton = !_showFloatingButton;
     });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Stack( // 使用 Stack 允許多個 Widget 疊加，包括可拖曳的 FloatingActionMenu 懸浮球
+      body: _pages[_currentIndex],
+      bottomNavigationBar: CustomBottomNavBar(
+        currentIndex: _currentIndex,
+        onTap: _onItemTapped,
+      ),
+    );
+  }
+}
+
+/// ⬇️ 自訂導覽列 Widget
+class CustomBottomNavBar extends StatelessWidget {
+  final int currentIndex;
+  final Function(int) onTap;
+
+  const CustomBottomNavBar({
+    super.key,
+    required this.currentIndex,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    Color mainGreen = const Color(0xFF8BA88E);
+
+    return Container(
+      height: 60, // 調整高度使其不佔版面
+      decoration: BoxDecoration(
+        color: mainGreen,
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(25), // 調整圓角半徑
+          topRight: Radius.circular(25), // 調整圓角半徑
+        ),
+      ),
+      child: Stack(
+        clipBehavior: Clip.none,
         children: [
-          // 顯示當前選中的底部導航欄頁面內容
-          _bottomBarPages[_currentIndex],
-          // 根據 _showFloatingButton 狀態決定是否顯示懸浮球
-          if (_showFloatingButton)
-            FloatingActionMenu(
-              screenshotController: screenshotController,
-              onTap: (index) {
-                // 懸浮球子按鈕點擊後，切換到對應的頁面
-                _onBottomBarItemTapped(index);
-              },
-              onClose: () {
-                // 懸浮球的關閉回呼，調用 _toggleFloatingButton 隱藏懸浮球
-                _toggleFloatingButton();
-              },
+          // 左右四個選項
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildNavItem(Icons.home, "首頁", 0, mainGreen),
+              _buildNavItem(Icons.access_time, "發現", 1, mainGreen),
+              const SizedBox(width: 60), // 中間空出位置
+              _buildNavItem(Icons.search, "新聞搜尋", 3, mainGreen),
+              _buildNavItem(Icons.person, "我的", 4, mainGreen),
+            ],
+          ),
+
+          // 中間凸起的圓形按鈕
+          Positioned(
+            top: -25,
+            left: MediaQuery.of(context).size.width / 2 - 45,
+            child: GestureDetector(
+              onTap: () => onTap(2), // index = 2 (AI助手)
+              child: Container(
+                width: 90,
+                height: 90,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: mainGreen, width: 4),
+                ),
+                child: Center(
+                  // 替換為 logo2.png
+                  child: Image.asset("lib/assets/logo2.png", height: 40, fit: BoxFit.contain),
+                ),
+              ),
             ),
+          ),
         ],
       ),
-      // 中間凸起的「真假聊聊」浮動動作按鈕
-      floatingActionButton: FloatingActionButton(
-        heroTag: 'protrudingAiButton', // 確保唯一的 heroTag，避免動畫衝突
-        backgroundColor: AppColors.primaryGreen, // 按鈕背景色為綠色
-        shape: const CircleBorder( // 圓形按鈕，帶有白色邊框
-          side: BorderSide(color: Colors.white, width: 3), // 白色邊框
-        ),
-        onPressed: _onAiButtonTapped, // 使用專門的點擊處理函數
-        child: Container(
-          padding: const EdgeInsets.all(5), // 內部填充
-          child: Image.asset( // 使用 Image.asset 加載 logo2.png 圖片
-            'lib/assets/logo2.png', // 使用正確的 logo2.png 路徑
-            width: 150, // 調整 Logo 寬度
-            height: 100, // 調整 Logo 高度
+    );
+  }
+
+  Widget _buildNavItem(IconData icon, String label, int index, Color mainGreen) {
+    bool isSelected = currentIndex == index;
+    return GestureDetector(
+      onTap: () => onTap(index),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, color: Colors.white, size: 24),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.white,
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            ),
           ),
-        ),
-      ),
-      // 將浮動動作按鈕定位在底部應用欄的中間凹槽
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      // 使用自定義的 BottomNavBar Widget 作為底部應用欄
-      bottomNavigationBar: BottomNavBar(
-        currentIndex: _currentIndex, // 將當前索引傳遞給導航欄
-        onTap: _onBottomBarItemTapped, // 傳遞點擊事件處理函數
+        ],
       ),
     );
   }

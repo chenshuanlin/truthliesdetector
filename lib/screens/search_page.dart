@@ -1,7 +1,14 @@
 import 'package:flutter/material.dart';
 
+// 🔹 這裡可以依專案需要導入其他頁面
+// import 'home_page.dart';
+// import 'profile_page.dart';
+// import 'ai_assistant_page.dart';
+
 class SearchPage extends StatefulWidget {
   const SearchPage({super.key});
+
+  static const String route = "/search"; // ✅ 方便路由管理
 
   @override
   State<SearchPage> createState() => _SearchPageState();
@@ -14,9 +21,6 @@ class _SearchPageState extends State<SearchPage> {
   String selectedCategory = "";
   TextEditingController keywordController = TextEditingController();
 
-  // 導覽列狀態
-  int _selectedIndex = 0;
-
   // 主綠色
   final Color mainGreen = const Color(0xFF9EB79E);
 
@@ -27,11 +31,11 @@ class _SearchPageState extends State<SearchPage> {
   Future<void> fetchArticles() async {
     List<Map<String, String>> result = [
       {
-        "title": "「新冠肺炎特效藥」正式獲醫管署有効！",
+        "title": "「新冠肺炎特效藥」正式獲醫管署有效！",
         "subtitle": "某新藥治療效果提高87%，多國醫療團隊證實......",
         "credibility": "低可信度",
         "content":
-        "某新藥治療效果據報提高87%，多國醫療團隊進行初步觀察，但尚未經過大規模臨床試驗或官方正式認證。",
+            "某新藥治療效果據報提高87%，多國醫療團隊進行初步觀察，但尚未經過大規模臨床試驗或官方正式認證。",
         "source": "健康日報",
         "time": "3小時前",
       },
@@ -40,7 +44,7 @@ class _SearchPageState extends State<SearchPage> {
         "subtitle": "多種藥物進入第三階段臨床試驗，療效尚待確認......",
         "credibility": "高可信度",
         "content":
-        "多種新冠肺炎治療藥物已進入第三階段臨床試驗，初步結果顯示部分藥物具有良好療效並且安全性可控。",
+            "多種新冠肺炎治療藥物已進入第三階段臨床試驗，初步結果顯示部分藥物具有良好療效並且安全性可控。",
         "source": "醫學期刊",
         "time": "昨天",
       },
@@ -49,7 +53,7 @@ class _SearchPageState extends State<SearchPage> {
         "subtitle": "數據顯示特效藥可減少30%住院率，但副作用問題......",
         "credibility": "中可信度",
         "content":
-        "最新研究顯示，新冠肺炎特效藥可降低約30%的住院率，但部分患者仍可能出現副作用，包括噁心、頭痛與疲倦。",
+            "最新研究顯示，新冠肺炎特效藥可降低約30%的住院率，但部分患者仍可能出現副作用，包括噁心、頭痛與疲倦。",
         "source": "科學報告",
         "time": "2天前",
       },
@@ -181,40 +185,14 @@ class _SearchPageState extends State<SearchPage> {
   }
 
   // Drawer 按鈕
-  Widget _buildDrawerButton(String label) {
+  Widget _buildDrawerButton(String label, {VoidCallback? onTap}) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () {},
+        onTap: onTap,
         child: ListTile(
           title: Center(
             child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 18)),
-          ),
-        ),
-      ),
-    );
-  }
-
-  // Bottom 導覽列按鈕
-  Widget _buildBottomNavButton(IconData icon, String label) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () {},
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 12.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, color: Colors.white, size: 24),
-              const SizedBox(height: 2),
-              Text(
-                label,
-                style: const TextStyle(color: Colors.white, fontSize: 12),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
           ),
         ),
       ),
@@ -232,6 +210,7 @@ class _SearchPageState extends State<SearchPage> {
     return Scaffold(
       backgroundColor: Colors.white,
 
+      // 🔹 Drawer
       drawer: SizedBox(
         width: MediaQuery.of(context).size.width * 0.6,
         child: Drawer(
@@ -250,9 +229,14 @@ class _SearchPageState extends State<SearchPage> {
                   fit: BoxFit.contain,
                 ),
               ),
-              _buildDrawerButton("首頁"),
+              _buildDrawerButton("首頁", onTap: () {
+                Navigator.pop(context);
+                // Navigator.pushNamed(context, HomePage.route);
+              }),
               _buildDrawerButton("最新消息"),
-              _buildDrawerButton("新聞搜尋"),
+              _buildDrawerButton("新聞搜尋", onTap: () {
+                Navigator.pop(context);
+              }),
               _buildDrawerButton("AI助手"),
               _buildDrawerButton("用戶資訊"),
             ],
@@ -277,6 +261,7 @@ class _SearchPageState extends State<SearchPage> {
         centerTitle: true,
       ),
 
+      // 🔹 Body
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -309,12 +294,12 @@ class _SearchPageState extends State<SearchPage> {
             ),
             const SizedBox(height: 16),
             _buildFilterSection("可信度篩選", ["高可信度", "中可信度", "低可信度"], selectedConfidence,
-                    (val) => setState(() => selectedConfidence = val)),
+                (val) => setState(() => selectedConfidence = val)),
             _buildFilterSection("發布時間", ["今天", "本週", "本月"], selectedTime,
-                    (val) => setState(() => selectedTime = val)),
+                (val) => setState(() => selectedTime = val)),
             _buildFilterSection("主題類別",
                 ["醫療", "研究", "新聞", "政策", "國際", "科技"], selectedCategory,
-                    (val) => setState(() => selectedCategory = val)),
+                (val) => setState(() => selectedCategory = val)),
             const SizedBox(height: 10),
             Row(
               children: [
@@ -336,50 +321,6 @@ class _SearchPageState extends State<SearchPage> {
             ),
           ],
         ),
-      ),
-
-      bottomNavigationBar: Stack(
-        alignment: Alignment.center,
-        clipBehavior: Clip.none,
-        children: [
-          Container(
-            height: 90,
-            decoration: BoxDecoration(
-              color: mainGreen,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(25),
-                topRight: Radius.circular(25),
-              ),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildBottomNavButton(Icons.home, "首頁"),
-                _buildBottomNavButton(Icons.access_time, "發現"),
-                const SizedBox(width: 100),
-                _buildBottomNavButton(Icons.search, "搜尋"),
-                _buildBottomNavButton(Icons.person, "我的"),
-              ],
-            ),
-          ),
-          // 中間 logo
-          Positioned(
-            top: -25,
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(50),
-                onTap: () {}, 
-                child: Image.asset(
-                  "lib/assets/logo2.png",
-                  width: 100,
-                  height: 100,
-                  fit: BoxFit.contain,
-                ),
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -420,4 +361,3 @@ class ArticleDetailPage extends StatelessWidget {
     );
   }
 }
-

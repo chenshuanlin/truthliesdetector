@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'Article_page.dart';
 
 class HistoryPage extends StatelessWidget {
+  static const String route = '/history'; 
   const HistoryPage({super.key});
 
   // 模擬瀏覽紀錄資料
