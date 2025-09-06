@@ -7,6 +7,9 @@ import 'package:screenshot/screenshot.dart'; // 導入截圖插件
 import 'package:truthliesdetector/themes/bottom.dart'; // 導入底部導航欄文件
 
 // 應用程式的主要進入點
+import 'home_page.dart';
+import 'Article_page.dart';
+
 void main() {
   runApp(const MyApp());
 }
