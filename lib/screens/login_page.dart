@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:truthliesdetector/screens/home_page.dart';
+// 我們需要引用 main.dart 來取得 MainLayout 的路由
+import 'package:truthliesdetector/main.dart'; 
 import 'package:truthliesdetector/screens/register_page.dart';
 
 const _sage = Color(0xFF9EB79E);
@@ -44,8 +45,8 @@ class _LoginPageState extends State<LoginPage> {
 
   void _login() {
     if (_formKey.currentState!.validate()) {
-      // ✅ 通過檢查 → 跳轉 HomePage
-      Navigator.pushReplacementNamed(context, HomePage.route);
+      // ✅ 通過檢查 → 修正：跳轉到包含底部導覽列的 MainLayout
+      Navigator.pushReplacementNamed(context, MainLayout.route);
     }
   }
 

@@ -150,10 +150,10 @@ class _FloatingActionMenuState extends State<FloatingActionMenu>
   /// 開啟應用程式主頁面
   void _openApp() {
     _toggleMenu();
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (context) => const HomePage()),
-      (Route<dynamic> route) => false,
-    );
+    // 修正導航邏輯，使用 onTap 回呼函式切換到主頁面
+    if (widget.onTap != null) {
+      widget.onTap!(0); // 0 是主頁面（HomePage）的索引
+    }
   }
 
   /// 建立子按鈕
@@ -279,10 +279,11 @@ class _FloatingActionMenuState extends State<FloatingActionMenu>
               heroTag: 'closeFloatingButton',
               child: const Icon(Icons.close, size: 22),
               onPressed: () {
+                _toggleMenu();
+                // 修正：如果父層提供了 onClose 回呼函式，則呼叫它
                 if (widget.onClose != null) {
                   widget.onClose!();
                 }
-                _toggleMenu();
               },
               backgroundColor: Colors.white,
               foregroundColor: AppColors.primaryGreen,

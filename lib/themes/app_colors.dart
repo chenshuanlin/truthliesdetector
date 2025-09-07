@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-// 定義一個 MaterialColor，以便 primary Color 可以使用十六進位顏色碼
+/// 定義一個 MaterialColor，以便 primary Color 可以使用十六進位顏色碼
 MaterialColor createMaterialColor(Color color) {
   List strengths = <double>[.05];
   Map<int, Color> swatch = {};
@@ -22,29 +22,35 @@ MaterialColor createMaterialColor(Color color) {
 }
 
 // 自訂主題綠
-final MaterialColor myCustomGreen =
-    createMaterialColor(const Color(0xFF9EB79E));
+final MaterialColor myCustomGreen = createMaterialColor(const Color(0xFF9EB79E));
 
 class AppColors {
+  // 主要色系
   static const Color primaryGreen = Color(0xFF9EB79E);
   static const Color primaryGreen2 = Color(0xFF9FCC9F);
   static const Color accentGreen = Color(0xFFC8E6C9);
 
-  // 原有
-  static const Color textColor = Colors.black87;
-  static const Color greyBackground = Colors.grey;
-
-  // 新增補齊（給 Article_page 用）
-  static const Color appBarGreen = Color(0xFF2E7D32);
+  // 輔助顏色
   static const Color dangerRed = Color(0xFFE53935);
-  static const Color lightGreenBG = Color(0xFFE8F5E9);
-  static const Color deepGreen = Color(0xFF1B5E20);
-  static const Color darkText = Color(0xFF212121);
-  static const Color labelGreenBG = Color(0xFFC8E6C9);
   static const Color userGray = Color(0xFF9E9E9E);
 
-  // 舊顏色（現在已不需要，因為已被更新或取代）
-  // static const Color primaryGreen = Color(0xFF678983);
+  // 文字顏色
+  static const Color textColor = Colors.black87;
+  static const Color darkText = Color(0xFF212121);
+
+  // 背景和標籤顏色
+  static const Color lightGreenBG = Color(0xFFE8F5E9);
+  static const Color labelGreenBG = Color(0xFFC8E6C9);
+  static const Color greyBackground = Colors.grey;
+  static const Color appBarGreen = Color(0xFF2E7D32);
+  static const Color deepGreen = Color(0xFF1B5E20);
+
+  // 舊顏色（已替換）
+  // static const Color primaryGreen = Color(0xFF8BA88E);
   // static const Color sage = Color(0xFF9EB79E);
   // static const Color sageDeep = Color(0xFF8EAA98);
+
+  // 漸層顏色（用於 SplashPage）
+  static const Color gradientGreenStart = Color(0xFFE8F5E9);
+  static const Color gradientGreenEnd = Color(0xFFDCEDC8);
 }

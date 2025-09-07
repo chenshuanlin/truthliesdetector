@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 class SettingsPage extends StatefulWidget {
+  static const route = '/settings';
   const SettingsPage({super.key});
 
   @override

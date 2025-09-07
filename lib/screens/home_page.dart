@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:truthliesdetector/screens/article_page.dart';
-import 'package:truthliesdetector/themes/app_drawer.dart';
+// 由於 MainLayout 已經提供 Drawer，HomePage 不再需要 AppDrawer 的導入。
+// import 'package:truthliesdetector/themes/app_drawer.dart';
 
 class HomePage extends StatefulWidget {
   static const route = '/home';
@@ -30,175 +31,151 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: bgGrey,
-      // 側邊選單
-      drawer: AppDrawer(mainGreen: mainGreen),
-      appBar: AppBar(
-        backgroundColor: mainGreen,
-        elevation: 0,
-        leading: Builder(
-          builder: (context) {
-            return IconButton(
-              icon: const Icon(Icons.menu, color: Colors.white),
-              onPressed: () {
-                Scaffold.of(context).openDrawer();
-              },
-            );
+    // 移除 Scaffold 和 AppBar，讓 MainLayout 來處理它們。
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        // 搜尋框
+        GestureDetector(
+          onTap: () {
+            // 點擊搜尋框的邏輯
+            print('Search bar tapped!');
           },
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications_none, color: Colors.white),
-            onPressed: () {},
-          )
-        ],
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          // 搜尋框
-          GestureDetector(
-            onTap: () {
-              // 點擊搜尋框的邏輯
-              print('Search bar tapped!');
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(25),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 6,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
-              ),
-              child: const Row(
-                children: [
-                  Icon(Icons.search, color: Colors.grey),
-                  SizedBox(width: 8),
-                  Text("搜尋文章、標籤或主題",
-                      style: TextStyle(color: Colors.grey, fontSize: 14)),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
-          // 熱門趨勢
-          const Text("熱門趨勢",
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 12),
-          Card(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            elevation: 2,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(16),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const ArticleDetailPage()),
-                );
-              },
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: mainGreen.withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text("#1",
-                              style: TextStyle(color: mainGreen, fontSize: 14)),
-                        ),
-                        const SizedBox(width: 8),
-                        const Expanded(
-                          child: Text("全球經濟議題",
-                              style: TextStyle(
-                                  fontSize: 16, fontWeight: FontWeight.bold)),
-                        )
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      "支持可持續發展的政策，多家國際組織共同發表聲明。",
-                      style: TextStyle(color: Colors.black54, fontSize: 14),
-                    ),
-                  ],
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(25),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 6,
+                  offset: const Offset(0, 3),
                 ),
-              ),
+              ],
             ),
-          ),
-          const SizedBox(height: 24),
-          // 為您推薦 + Tab
-          const Text("為您推薦",
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 12),
-          TabBar(
-            controller: _tabController,
-            labelColor: mainGreen,
-            unselectedLabelColor: Colors.grey,
-            indicatorColor: Colors.transparent,
-            labelStyle:
-                const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            unselectedLabelStyle:
-                const TextStyle(fontSize: 16, fontWeight: FontWeight.normal),
-            tabs: const [
-              Tab(text: "熱門"),
-              Tab(text: "最新"),
-              Tab(text: "專題"),
-            ],
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            height: 180,
-            child: TabBarView(
-              controller: _tabController,
+            child: const Row(
               children: [
-                _buildRecommendList([
-                  {"title": "熱門健康趨勢", "count": "50篇"},
-                  {"title": "熱門投資策略", "count": "75篇"},
-                ]),
-                _buildRecommendList([
-                  {"title": "最新環保新聞", "count": "30篇"},
-                  {"title": "最新AI技術", "count": "40篇"},
-                ]),
-                _buildRecommendList([
-                  {"title": "專題：能源轉型", "count": "20篇"},
-                  {"title": "專題：智慧城市", "count": "15篇"},
-                ]),
+                Icon(Icons.search, color: Colors.grey),
+                SizedBox(width: 8),
+                Text("搜尋文章、標籤或主題",
+                    style: TextStyle(color: Colors.grey, fontSize: 14)),
               ],
             ),
           ),
-          const SizedBox(height: 24),
-          // 今日排行榜
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        ),
+        const SizedBox(height: 24),
+        // 熱門趨勢
+        const Text("熱門趨勢",
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 12),
+        Card(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          elevation: 2,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ArticleDetailPage()),
+              );
+            },
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: mainGreen.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text("#1",
+                            style: TextStyle(color: mainGreen, fontSize: 14)),
+                      ),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text("全球經濟議題",
+                            style: TextStyle(
+                                fontSize: 16, fontWeight: FontWeight.bold)),
+                      )
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    "支持可持續發展的政策，多家國際組織共同發表聲明。",
+                    style: TextStyle(color: Colors.black54, fontSize: 14),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 24),
+        // 為您推薦 + Tab
+        const Text("為您推薦",
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 12),
+        TabBar(
+          controller: _tabController,
+          labelColor: mainGreen,
+          unselectedLabelColor: Colors.grey,
+          indicatorColor: Colors.transparent,
+          labelStyle:
+              const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          unselectedLabelStyle:
+              const TextStyle(fontSize: 16, fontWeight: FontWeight.normal),
+          tabs: const [
+            Tab(text: "熱門"),
+            Tab(text: "最新"),
+            Tab(text: "專題"),
+          ],
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 180,
+          child: TabBarView(
+            controller: _tabController,
             children: [
-              const Text("今日排行榜",
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-              TextButton(
-                onPressed: () {},
-                child: Text("更多", style: TextStyle(color: mainGreen)),
-              )
+              _buildRecommendList([
+                {"title": "熱門健康趨勢", "count": "50篇"},
+                {"title": "熱門投資策略", "count": "75篇"},
+              ]),
+              _buildRecommendList([
+                {"title": "最新環保新聞", "count": "30篇"},
+                {"title": "最新AI技術", "count": "40篇"},
+              ]),
+              _buildRecommendList([
+                {"title": "專題：能源轉型", "count": "20篇"},
+                {"title": "專題：智慧城市", "count": "15篇"},
+              ]),
             ],
           ),
-          const SizedBox(height: 12),
-          _buildRankItem("台積電宣布在日本設立新廠", "半導體產業 · 3小時前", Colors.green),
-          _buildRankItem("新冠疫情有專家強調應該進入新階段", "國際新聞 · 5小時前", Colors.red),
-          _buildRankItem("台北將舉辦2026年運動會", "體育賽事 · 2天前", Colors.orange),
-        ],
-      ),
+        ),
+        const SizedBox(height: 24),
+        // 今日排行榜
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text("今日排行榜",
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            TextButton(
+              onPressed: () {},
+              child: Text("更多", style: TextStyle(color: mainGreen)),
+            )
+          ],
+        ),
+        const SizedBox(height: 12),
+        _buildRankItem("台積電宣布在日本設立新廠", "半導體產業 · 3小時前", Colors.green),
+        _buildRankItem("新冠疫情有專家強調應該進入新階段", "國際新聞 · 5小時前", Colors.red),
+        _buildRankItem("台北將舉辦2026年運動會", "體育賽事 · 2天前", Colors.orange),
+      ],
     );
   }
 

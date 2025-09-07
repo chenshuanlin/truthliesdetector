@@ -232,8 +232,7 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
               valueColor: AlwaysStoppedAnimation<Color>(
                   _article.credibilityScore > 70
                       ? AppColors.deepGreen
-                      : (_article.credibilityScore > 40 ? Colors.orange : AppColors.dangerRed)
-              ),
+                      : (_article.credibilityScore > 40 ? Colors.orange : AppColors.dangerRed)),
             ),
             const SizedBox(height: 12),
             Text(

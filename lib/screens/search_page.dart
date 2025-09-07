@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
 // 🔹 這裡可以依專案需要導入其他頁面
-// import 'home_page.dart';
-// import 'profile_page.dart';
-// import 'ai_assistant_page.dart';
+import 'home_page.dart';
+import  'profile_page.dart';
+import 'AIacc.dart';
 
 class SearchPage extends StatefulWidget {
   const SearchPage({super.key});
@@ -184,21 +184,6 @@ class _SearchPageState extends State<SearchPage> {
     );
   }
 
-  // Drawer 按鈕
-  Widget _buildDrawerButton(String label, {VoidCallback? onTap}) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        child: ListTile(
-          title: Center(
-            child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 18)),
-          ),
-        ),
-      ),
-    );
-  }
-
   @override
   void initState() {
     super.initState();
@@ -207,120 +192,66 @@ class _SearchPageState extends State<SearchPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-
-      // 🔹 Drawer
-      drawer: SizedBox(
-        width: MediaQuery.of(context).size.width * 0.6,
-        child: Drawer(
-          backgroundColor: mainGreen,
-          child: ListView(
-            padding: const EdgeInsets.only(top: 40),
-            children: [
-              Container(
-                color: mainGreen,
-                height: 160,
-                alignment: Alignment.center,
-                padding: const EdgeInsets.all(16),
-                child: Image.asset(
-                  "lib/assets/logo1.png",
-                  height: 120,
-                  fit: BoxFit.contain,
-                ),
-              ),
-              _buildDrawerButton("首頁", onTap: () {
-                Navigator.pop(context);
-                // Navigator.pushNamed(context, HomePage.route);
-              }),
-              _buildDrawerButton("最新消息"),
-              _buildDrawerButton("新聞搜尋", onTap: () {
-                Navigator.pop(context);
-              }),
-              _buildDrawerButton("AI助手"),
-              _buildDrawerButton("用戶資訊"),
-            ],
-          ),
-        ),
-      ),
-
-      appBar: AppBar(
-        backgroundColor: mainGreen,
-        elevation: 0,
-        leading: Builder(
-          builder: (context) => IconButton(
-            icon: const Icon(Icons.menu, color: Colors.white),
-            onPressed: () => Scaffold.of(context).openDrawer(),
-          ),
-        ),
-        title: Image.asset(
-          "lib/assets/logo1.png",
-          height: 80,
-          fit: BoxFit.contain,
-        ),
-        centerTitle: true,
-      ),
-
-      // 🔹 Body
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // 搜尋框
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(30),
-                border: Border.all(color: Colors.grey.shade300),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.search, color: Colors.grey),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextField(
-                      controller: keywordController,
-                      decoration: const InputDecoration(
-                        hintText: "搜尋關鍵字",
-                        border: InputBorder.none,
-                      ),
-                      onSubmitted: (_) => fetchArticles(),
-                    ),
-                  ),
-                ],
-              ),
+    // ⚠️ 注意：由於 MainLayout 已經提供 Scaffold、AppBar 和 Drawer，
+    // SearchPage 內部不再需要 Scaffold。
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 搜尋框
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(30),
+              border: Border.all(color: Colors.grey.shade300),
             ),
-            const SizedBox(height: 16),
-            _buildFilterSection("可信度篩選", ["高可信度", "中可信度", "低可信度"], selectedConfidence,
-                (val) => setState(() => selectedConfidence = val)),
-            _buildFilterSection("發布時間", ["今天", "本週", "本月"], selectedTime,
-                (val) => setState(() => selectedTime = val)),
-            _buildFilterSection("主題類別",
-                ["醫療", "研究", "新聞", "政策", "國際", "科技"], selectedCategory,
-                (val) => setState(() => selectedCategory = val)),
-            const SizedBox(height: 10),
-            Row(
+            child: Row(
               children: [
-                const Text("搜尋結果",
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                const Spacer(),
-                Text("共找到 ${articles.length} 篇報導",
-                    style: const TextStyle(color: Colors.blue)),
+                const Icon(Icons.search, color: Colors.grey),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: keywordController,
+                    decoration: const InputDecoration(
+                      hintText: "搜尋關鍵字",
+                      border: InputBorder.none,
+                    ),
+                    onSubmitted: (_) => fetchArticles(),
+                  ),
+                ),
               ],
             ),
-            const SizedBox(height: 8),
-            Expanded(
-              child: ListView.builder(
-                itemCount: articles.length,
-                itemBuilder: (context, index) {
-                  return _buildArticleCard(articles[index]);
-                },
-              ),
+          ),
+          const SizedBox(height: 16),
+          _buildFilterSection("可信度篩選", ["高可信度", "中可信度", "低可信度"], selectedConfidence,
+              (val) => setState(() => selectedConfidence = val)),
+          _buildFilterSection("發布時間", ["今天", "本週", "本月"], selectedTime,
+              (val) => setState(() => selectedTime = val)),
+          _buildFilterSection("主題類別",
+              ["醫療", "研究", "新聞", "政策", "國際", "科技"], selectedCategory,
+              (val) => setState(() => selectedCategory = val)),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              const Text("搜尋結果",
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              const Spacer(),
+              Text("共找到 ${articles.length} 篇報導",
+                  style: const TextStyle(color: Colors.blue)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: ListView.builder(
+              itemCount: articles.length,
+              itemBuilder: (context, index) {
+                return _buildArticleCard(articles[index]);
+              },
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
