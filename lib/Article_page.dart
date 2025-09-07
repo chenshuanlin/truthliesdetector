@@ -6,6 +6,7 @@ class AppColors {
   static const Color labelGreenBG = Color(0xFFD7EAD9);
   static const Color userGray = Color(0xFFCCCCCC);
   static const Color darkText = Color(0xFF333333);
+  static const Color alertred = Color(0xFFD85E5E);
 }
 
 class ArticleDetailPage extends StatelessWidget {
@@ -32,10 +33,10 @@ class ArticleDetailPage extends StatelessWidget {
             icon: Container(
               decoration: const BoxDecoration(
                 shape: BoxShape.circle,
-                color: Color(0xFFFFF0F0),
+                color: Color(0xFFD85E5E),
               ),
               padding: const EdgeInsets.all(6),
-              child: const Icon(Icons.error_outline, color: Colors.red, size: 20),
+              child: const Icon(Icons.error_outline, color: Colors.white, size: 20),
             ),
             onPressed: () {
               showDialog(
@@ -69,12 +70,12 @@ class ArticleDetailPage extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          color: Colors.red[50],
+                          color: Color(0xFFD85E5E),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: const Text(
                           "低可信度",
-                          style: TextStyle(color: Colors.red, fontSize: 12),
+                          style: TextStyle(color: Colors.white, fontSize: 12),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -352,7 +353,10 @@ class ArticleDetailPage extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Container(
         padding: const EdgeInsets.all(16),
-        color: const Color(0xFF8DA391),
+        decoration: BoxDecoration(
+          color: AppColors.lightGreenBG,
+          borderRadius: BorderRadius.circular(12),
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -363,55 +367,63 @@ class ArticleDetailPage extends StatelessWidget {
                 const Text(
                   "疑慮內容回報",
                   style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white),
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.darkText,
+                  ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.close, color: Colors.white),
+                  icon: const Icon(Icons.close, color: Colors.black54),
                   onPressed: () => Navigator.pop(context),
-                )
+                ),
               ],
             ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Text(
-                "請簡要說明您對這篇文章的疑慮，例如：\n• 不實資訊\n• 不當言論\n• 垃圾訊息等",
-                style: TextStyle(fontSize: 13, height: 1.5),
-              ),
+            const SizedBox(height: 8),
+            const Text(
+              "為了協助我們更準確地處理您提交的回報，請簡要說明您對這篇文章的疑慮。以下是一些常見的舉報理由供您參考：\n"
+                  "· 涉及不實資訊或誤導內容\n"
+                  "· 含有仇恨言論、歧視或人身攻擊\n"
+                  "· 涉及暴力、色情或其他不當內容\n"
+                  "· 侵犯他人隱私或智慧財產權\n"
+                  "· 與平台規範不符的廣告或垃圾訊息\n\n"
+                  "請盡可能具體說明問題所在，感謝您的協助！",
+              style: TextStyle(fontSize: 13, color: AppColors.darkText, height: 1.5),
             ),
             const SizedBox(height: 12),
             const TextField(
-              maxLines: 3,
+              maxLines: 4,
               decoration: InputDecoration(
                 hintText: "請說明舉報理由...",
-                fillColor: Colors.white,
-                filled: true,
                 border: OutlineInputBorder(),
+                filled: true,
+                fillColor: Colors.white,
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
             Align(
               alignment: Alignment.centerRight,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
+                  backgroundColor: AppColors.alertred,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(6),
                   ),
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
                 ),
-                onPressed: () => Navigator.pop(context),
-                child: const Text("舉報", style: TextStyle(color: Colors.white)),
+                onPressed: () {
+                  Navigator.pop(context);
+                  // TODO: 舉報提交處理
+                },
+                child: const Text(
+                  "舉報",
+                  style: TextStyle(color: Colors.white, fontSize: 14),
+                ),
               ),
-            )
+            ),
           ],
         ),
       ),
     );
   }
+
 }
