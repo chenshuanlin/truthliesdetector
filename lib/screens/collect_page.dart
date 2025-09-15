@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'Article_page.dart'; // 引入文章頁面
 
 class CollectPage extends StatefulWidget {
+  static const String route = '/collect';
   const CollectPage({super.key});
 
   @override
@@ -56,9 +57,9 @@ class _CollectPageState extends State<CollectPage> {
         title: const Text(
           "收藏文章",
           style: TextStyle(
-            color: Colors.white,      // 白色文字
-            fontSize: 18,             // 字體大小 18
-            fontWeight: FontWeight.w600, // 半粗體
+            color: Colors.white,      
+            fontSize: 18,             
+            fontWeight: FontWeight.w600, 
           ),
         ),
         centerTitle: false,
@@ -133,6 +134,7 @@ class _CollectPageState extends State<CollectPage> {
                                   context,
                                   MaterialPageRoute(
                                     builder: (context) => ArticleDetailPage(
+                                      articleId: index + 1, // 模擬 articleId
                                     ),
                                   ),
                                 );
