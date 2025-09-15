@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'Article_page.dart';
 
 class HistoryPage extends StatelessWidget {
+  static const String route = '/history';
   const HistoryPage({super.key});
 
   // 模擬瀏覽紀錄資料
@@ -109,15 +110,15 @@ class HistoryPage extends StatelessWidget {
                               style: TextButton.styleFrom(
                                 padding: EdgeInsets.zero,
                                 minimumSize: const Size(0, 0),
-                                tapTargetSize:
-                                MaterialTapTargetSize.shrinkWrap,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                               ),
                               onPressed: () {
-                                // ✅ 跳轉到 ArticlePage
+                                // ✅ 跳轉到 ArticlePage 並帶入 articleId
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
                                     builder: (context) => ArticleDetailPage(
+                                      articleId: index + 1, // 模擬 articleId
                                     ),
                                   ),
                                 );
