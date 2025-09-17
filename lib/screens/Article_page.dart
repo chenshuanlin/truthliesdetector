@@ -5,8 +5,7 @@ import '../services/article_service.dart';
 
 class ArticleDetailPage extends StatefulWidget {
   static const String route = '/article';
-
-  final int articleId; // ✅ 必填文章 ID
+  final int articleId; // 必填文章 ID
 
   const ArticleDetailPage({super.key, required this.articleId});
 
@@ -27,8 +26,8 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
   void _submitComment(List<Comment> comments) {
     if (_commentController.text.isNotEmpty) {
       final newComment = Comment(
-        commentId: DateTime.now().millisecondsSinceEpoch, // 臨時 ID
-        userId: 0, // 匿名
+        commentId: DateTime.now().millisecondsSinceEpoch,
+        userId: 0,
         articleId: widget.articleId,
         content: _commentController.text,
         userIdentity: "匿名",
@@ -38,7 +37,7 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
         comments.add(newComment);
         _commentController.clear();
       });
-      // TODO: 這裡可以再呼叫 API 發送評論
+      // TODO: 呼叫 API 發送評論
     }
   }
 
@@ -89,7 +88,7 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
                 Text(article.content,
                     style: const TextStyle(fontSize: 14, height: 1.5)),
                 const SizedBox(height: 20),
-                _buildRelatedNews(article),
+                _buildRelatedNews(article), // ✅ 顯示相似新聞
                 const SizedBox(height: 20),
                 _buildCommentSection(comments),
               ],
@@ -113,6 +112,7 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
       credibilityText = "低可信度";
       credibilityColor = AppColors.dangerRed;
     }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -133,7 +133,7 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
               ),
             ),
             const SizedBox(width: 8),
-            Text("發布時間：${article.publishedTime.toString()}",
+            Text("發布時間：${article.publishedTime}",
                 style: const TextStyle(fontSize: 12, color: Colors.grey)),
           ],
         ),
@@ -194,37 +194,34 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text("相關新聞",
+          const Text("相似新聞",
               style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.deepGreen)),
+                  fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.deepGreen)),
           const SizedBox(height: 12),
-          ...article.relatedNews
-              .map((news) => Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6),
-            child: Row(
-              children: [
-                const Icon(Icons.article_outlined,
-                    size: 18, color: Colors.black54),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(news.relatedTitle,
-                      style: const TextStyle(
-                          fontSize: 13, color: AppColors.darkText)),
-                ),
-                const SizedBox(width: 6),
-                GestureDetector(
-                  onTap: () {
-                    // TODO: 打開相關新聞連結
-                  },
-                  child: const Icon(Icons.open_in_new,
-                      size: 18, color: AppColors.deepGreen),
-                ),
-              ],
-            ),
-          ))
-              .toList(),
+          ...article.relatedNews.map((news) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Row(
+                children: [
+                  const Icon(Icons.article_outlined, size: 18, color: Colors.black54),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(news.relatedTitle,
+                        style: const TextStyle(fontSize: 13, color: AppColors.darkText)),
+                  ),
+                  const SizedBox(width: 6),
+                  GestureDetector(
+                    onTap: () {
+                      // TODO: 打開相關新聞連結
+                      // 可使用 url_launcher 套件
+                    },
+                    child: const Icon(Icons.open_in_new,
+                        size: 18, color: AppColors.deepGreen),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
         ],
       ),
     );
@@ -253,8 +250,7 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
           width: double.infinity,
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius:
-            const BorderRadius.vertical(bottom: Radius.circular(12)),
+            borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
             border: Border.all(color: Colors.grey.shade300),
           ),
           child: Column(
@@ -276,7 +272,7 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           CircleAvatar(
-            backgroundColor: AppColors.userGray,
+            backgroundColor: comment.isExpert ? AppColors.deepGreen : AppColors.userGray,
             radius: 16,
             child: const Icon(Icons.person, color: Colors.white, size: 18),
           ),
@@ -286,12 +282,12 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(comment.userIdentity,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold, color: Colors.black87)),
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: comment.isExpert ? AppColors.deepGreen : Colors.black87)),
                 const SizedBox(height: 4),
                 Text(comment.content,
-                    style:
-                    const TextStyle(fontSize: 13, color: AppColors.darkText)),
+                    style: const TextStyle(fontSize: 13, color: AppColors.darkText)),
               ],
             ),
           )
@@ -310,12 +306,10 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
               controller: _commentController,
               decoration: InputDecoration(
                 hintText: "留下您的評論...",
-                contentPadding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  borderSide:
-                  const BorderSide(color: AppColors.userGray, width: 1),
+                  borderSide: const BorderSide(color: AppColors.userGray, width: 1),
                 ),
               ),
               onSubmitted: (_) => _submitComment(comments),
