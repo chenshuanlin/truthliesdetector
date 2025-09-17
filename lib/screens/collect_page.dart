@@ -57,9 +57,9 @@ class _CollectPageState extends State<CollectPage> {
         title: const Text(
           "收藏文章",
           style: TextStyle(
-            color: Colors.white,      
-            fontSize: 18,             
-            fontWeight: FontWeight.w600, 
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
           ),
         ),
         centerTitle: false,
