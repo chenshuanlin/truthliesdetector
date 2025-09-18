@@ -1,7 +1,8 @@
-import 'package:flutter/material.dart';
-import 'package:truthliesdetector/screens/login_page.dart';
-import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:flutter_dotenv/flutter_dotenv.dart';   // ✅ 新增：讀取環境變數
+import 'package:truthliesdetector/screens/login_page.dart';
 
 const _sage = Color(0xFF9EB79E);
 const _sageDeep = Color(0xFF8EAA98);
@@ -26,27 +27,27 @@ class _RegisterPageState extends State<RegisterPage> {
   bool _obscure = true;
 
   InputDecoration _input(String label) => InputDecoration(
-    labelText: label,
-    filled: true,
-    fillColor: const Color(0xFFF7F8F7),
-    labelStyle: const TextStyle(color: Colors.black54),
-    contentPadding:
-    const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-    border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(color: Color(0xFFD5DDD8)),
-    ),
-    enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(color: Color(0xFFD5DDD8)),
-    ),
-    focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(color: _sageDeep, width: 1.2),
-    ),
-  );
+        labelText: label,
+        filled: true,
+        fillColor: const Color(0xFFF7F8F7),
+        labelStyle: const TextStyle(color: Colors.black54),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFFD5DDD8)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFFD5DDD8)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: _sageDeep, width: 1.2),
+        ),
+      );
 
-  // 註冊方法
+  // ✅ 註冊方法
   void _register() async {
     if (!_formKey.currentState!.validate()) return;
     if (!_agree) {
@@ -56,7 +57,10 @@ class _RegisterPageState extends State<RegisterPage> {
       return;
     }
 
-    final url = Uri.parse('http://10.0.2.2:8000/register'); // Android 模擬器使用 10.0.2.2
+    // 🔑 從 .env 取得 API_URL，若沒有就預設本機
+    final apiUrl = dotenv.env['API_URL'] ?? 'http://127.0.0.1:8000';
+    final url = Uri.parse('$apiUrl/register');   // ✅ 註冊應該呼叫 /register
+
     final body = {
       "username": _username.text,
       "account": _account.text,
@@ -82,7 +86,7 @@ class _RegisterPageState extends State<RegisterPage> {
       } else {
         final data = jsonDecode(response.body);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('註冊失敗: ${data['detail']}')),
+          SnackBar(content: Text('註冊失敗: ${data['detail'] ?? response.statusCode}')),
         );
       }
     } catch (e) {
@@ -133,14 +137,14 @@ class _RegisterPageState extends State<RegisterPage> {
                           controller: _username,
                           decoration: _input('用戶名稱'),
                           validator: (v) =>
-                          v == null || v.isEmpty ? '請輸入用戶名稱' : null,
+                              v == null || v.isEmpty ? '請輸入用戶名稱' : null,
                         ),
                         const SizedBox(height: 12),
                         TextFormField(
                           controller: _account,
                           decoration: _input('帳號'),
                           validator: (v) =>
-                          v == null || v.isEmpty ? '請輸入帳號' : null,
+                              v == null || v.isEmpty ? '請輸入帳號' : null,
                         ),
                         const SizedBox(height: 12),
                         TextFormField(
@@ -148,9 +152,11 @@ class _RegisterPageState extends State<RegisterPage> {
                           obscureText: _obscure,
                           decoration: _input('密碼').copyWith(
                             suffixIcon: IconButton(
-                              icon: Icon(_obscure
-                                  ? Icons.visibility
-                                  : Icons.visibility_off),
+                              icon: Icon(
+                                _obscure
+                                    ? Icons.visibility
+                                    : Icons.visibility_off,
+                              ),
                               onPressed: () =>
                                   setState(() => _obscure = !_obscure),
                             ),

@@ -1,8 +1,9 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
-// 我們需要引用 main.dart 來取得 MainLayout 的路由
+// 取得 MainLayout 的路由
 import 'package:truthliesdetector/main.dart';
 import 'package:truthliesdetector/screens/register_page.dart';
 
@@ -27,25 +28,25 @@ class _LoginPageState extends State<LoginPage> {
   bool _loading = false;
 
   InputDecoration _input(String label) => InputDecoration(
-    labelText: label,
-    filled: true,
-    fillColor: const Color(0xFFF7F8F7),
-    labelStyle: const TextStyle(color: Colors.black54),
-    contentPadding:
-    const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-    border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(color: Color(0xFFD5DDD8)),
-    ),
-    enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(color: Color(0xFFD5DDD8)),
-    ),
-    focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(color: _sageDeep, width: 1.2),
-    ),
-  );
+        labelText: label,
+        filled: true,
+        fillColor: const Color(0xFFF7F8F7),
+        labelStyle: const TextStyle(color: Colors.black54),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFFD5DDD8)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFFD5DDD8)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: _sageDeep, width: 1.2),
+        ),
+      );
 
   Future<void> _login() async {
     if (!_formKey.currentState!.validate()) return;
@@ -53,8 +54,11 @@ class _LoginPageState extends State<LoginPage> {
     setState(() => _loading = true);
 
     try {
+      // 🔑 從 .env 讀取 API_URL，如果沒有就預設本機
+      final apiUrl = dotenv.env['API_URL'] ?? 'http://127.0.0.1:8000';
+
       final response = await http.post(
-        Uri.parse("http://10.0.2.2:8000/login"), // ✅ 呼叫後端登入 API
+        Uri.parse('$apiUrl/login'),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
           "account": _account.text.trim(),
@@ -63,7 +67,6 @@ class _LoginPageState extends State<LoginPage> {
       );
 
       if (response.statusCode == 200) {
-        // ✅ 登入成功 → 進入 MainLayout
         final data = jsonDecode(response.body);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("登入成功，歡迎 ${data['username']}")),
@@ -71,7 +74,6 @@ class _LoginPageState extends State<LoginPage> {
 
         Navigator.pushReplacementNamed(context, MainLayout.route);
       } else {
-        // ❌ 登入失敗 → 提示錯誤
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("帳號或密碼錯誤，請先註冊")),
         );
@@ -112,7 +114,6 @@ class _LoginPageState extends State<LoginPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // 登入標題 + 底線
                       Column(
                         children: [
                           Text(
@@ -137,7 +138,7 @@ class _LoginPageState extends State<LoginPage> {
                         controller: _account,
                         decoration: _input('帳號'),
                         validator: (v) =>
-                        v == null || v.isEmpty ? '請輸入帳號' : null,
+                            v == null || v.isEmpty ? '請輸入帳號' : null,
                       ),
                       const SizedBox(height: 12),
 
@@ -148,14 +149,16 @@ class _LoginPageState extends State<LoginPage> {
                         decoration: _input('密碼').copyWith(
                           suffixIcon: IconButton(
                             icon: Icon(
-                              _obscure ? Icons.visibility : Icons.visibility_off,
+                              _obscure
+                                  ? Icons.visibility
+                                  : Icons.visibility_off,
                             ),
                             onPressed: () =>
                                 setState(() => _obscure = !_obscure),
                           ),
                         ),
                         validator: (v) =>
-                        v == null || v.isEmpty ? '請輸入密碼' : null,
+                            v == null || v.isEmpty ? '請輸入密碼' : null,
                       ),
                       const SizedBox(height: 8),
 
@@ -186,8 +189,8 @@ class _LoginPageState extends State<LoginPage> {
                         onPressed: _loading ? null : _login,
                         child: _loading
                             ? const CircularProgressIndicator(
-                          color: Colors.white,
-                        )
+                                color: Colors.white,
+                              )
                             : const Text('登入'),
                       ),
                       const SizedBox(height: 8),

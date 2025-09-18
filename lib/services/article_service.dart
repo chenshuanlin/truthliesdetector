@@ -2,13 +2,24 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/article_model.dart';
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter_dotenv/flutter_dotenv.dart';   // ✅ 新增
 
 class ApiService {
+  // ✅ 從 .env 讀取 API_URL，若沒設定則依平台給預設值
   static String get baseUrl {
-    if (Platform.isAndroid) {
-      return "http://10.0.2.2:8000"; // Android 模擬器
+    final envUrl = dotenv.env['API_URL'];
+    if (envUrl != null && envUrl.isNotEmpty) {
+      return envUrl;
+    }
+
+    // ↓ 以下為 fallback，用於本機沒有 .env 或測試環境
+    if (kIsWeb) {
+      return "http://127.0.0.1:8000";
+    } else if (Platform.isAndroid) {
+      return "http://10.0.2.2:8000";
     } else {
-      return "http://127.0.0.1:8000"; // iOS 模擬器或桌機
+      return "http://127.0.0.1:8000";
     }
   }
 
