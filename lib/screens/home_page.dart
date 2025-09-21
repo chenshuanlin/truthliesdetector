@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:truthliesdetector/screens/article_page.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 
 class HomePage extends StatefulWidget {
   static const route = '/home';
@@ -11,14 +13,27 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   late TabController _tabController;
-
   final Color mainGreen = const Color(0xFF8BA88E);
-  final Color bgGrey = const Color(0xFFF5F5F5);
+
+  // API 位置
+  final String apiBaseUrl = 'http://10.0.2.2:8000';
+
+  late Future<List<dynamic>> todayArticles;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    todayArticles = fetchTodayArticles();
+  }
+
+  Future<List<dynamic>> fetchTodayArticles() async {
+    final response = await http.get(Uri.parse('$apiBaseUrl/articles?limit=3'));
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('無法取得文章資料');
+    }
   }
 
   @override
@@ -169,11 +184,47 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           ],
         ),
         const SizedBox(height: 12),
-        _buildRankItem("台積電宣布在日本設立新廠", "半導體產業 · 3小時前", Colors.green, 2),
-        _buildRankItem("新冠疫情有專家強調應該進入新階段",
-            "國際新聞 · 5小時前", Colors.red, 3),
-        _buildRankItem("台北將舉辦2026年運動會", "體育賽事 · 2天前",
-            Colors.orange, 4),
+        FutureBuilder<List<dynamic>>(
+          future: todayArticles,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            } else if (snapshot.hasError) {
+              return Center(child: Text('取得排行榜失敗: ${snapshot.error}'));
+            } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+              return const Center(child: Text('目前沒有文章'));
+            } else {
+              final articles = snapshot.data!;
+              return Column(
+                children: articles.asMap().entries.map((entry) {
+                  int index = entry.key;
+                  var article = entry.value;
+                  Color color;
+                  // 根據分類選顏色示例
+                  switch ((article['category'] ?? '').toString().toLowerCase()) {
+                    case '國際新聞':
+                      color = Colors.red;
+                      break;
+                    case '半導體產業':
+                      color = Colors.green;
+                      break;
+                    case '體育賽事':
+                      color = Colors.orange;
+                      break;
+                    default:
+                      color = Colors.blueGrey;
+                  }
+                  return _buildRankItem(
+                    article['title'] ?? '無標題',
+                    "${article['category'] ?? '其他'} · ${article['published_time'] ?? ''}",
+                    color,
+                    article['article_id'],
+                  );
+                }).toList(),
+              );
+            }
+          },
+        ),
       ],
     );
   }

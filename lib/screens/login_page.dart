@@ -1,8 +1,10 @@
 import 'dart:convert';
+import 'dart:io' show Platform; // ✅ 判斷平台
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
-// 我們需要引用 main.dart 來取得 MainLayout 的路由
+// 取得 MainLayout 的路由
 import 'package:truthliesdetector/main.dart';
 import 'package:truthliesdetector/screens/register_page.dart';
 
@@ -31,8 +33,7 @@ class _LoginPageState extends State<LoginPage> {
     filled: true,
     fillColor: const Color(0xFFF7F8F7),
     labelStyle: const TextStyle(color: Colors.black54),
-    contentPadding:
-    const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
     border: OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
       borderSide: const BorderSide(color: Color(0xFFD5DDD8)),
@@ -47,14 +48,25 @@ class _LoginPageState extends State<LoginPage> {
     ),
   );
 
+  // ✅ 登入方法
   Future<void> _login() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _loading = true);
 
     try {
+      // 🔑 自動選 API URL
+      String apiUrl;
+      if (Platform.isAndroid) {
+        apiUrl = 'http://10.0.2.2:8000'; // Android 模擬器
+      } else if (Platform.isIOS) {
+        apiUrl = 'http://127.0.0.1:8000'; // iOS 模擬器
+      } else {
+        apiUrl = dotenv.env['API_URL'] ?? 'http://127.0.0.1:8000'; // 真機或 fallback
+      }
+
       final response = await http.post(
-        Uri.parse("http://10.0.2.2:8000/login"), // ✅ 呼叫後端登入 API
+        Uri.parse('$apiUrl/login'),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
           "account": _account.text.trim(),
@@ -63,7 +75,6 @@ class _LoginPageState extends State<LoginPage> {
       );
 
       if (response.statusCode == 200) {
-        // ✅ 登入成功 → 進入 MainLayout
         final data = jsonDecode(response.body);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("登入成功，歡迎 ${data['username']}")),
@@ -71,9 +82,9 @@ class _LoginPageState extends State<LoginPage> {
 
         Navigator.pushReplacementNamed(context, MainLayout.route);
       } else {
-        // ❌ 登入失敗 → 提示錯誤
+        final data = jsonDecode(response.body);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("帳號或密碼錯誤，請先註冊")),
+          SnackBar(content: Text("登入失敗: ${data['detail'] ?? '帳號或密碼錯誤'}")),
         );
       }
     } catch (e) {
@@ -112,7 +123,6 @@ class _LoginPageState extends State<LoginPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // 登入標題 + 底線
                       Column(
                         children: [
                           Text(

@@ -1,7 +1,9 @@
-import 'package:flutter/material.dart';
-import 'package:truthliesdetector/screens/login_page.dart';
-import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:io' show Platform;  // ✅ 判斷平台
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:flutter_dotenv/flutter_dotenv.dart';   // ✅ 讀取環境變數
+import 'package:truthliesdetector/screens/login_page.dart';
 
 const _sage = Color(0xFF9EB79E);
 const _sageDeep = Color(0xFF8EAA98);
@@ -46,7 +48,7 @@ class _RegisterPageState extends State<RegisterPage> {
     ),
   );
 
-  // 註冊方法
+  // ✅ 註冊方法
   void _register() async {
     if (!_formKey.currentState!.validate()) return;
     if (!_agree) {
@@ -56,7 +58,18 @@ class _RegisterPageState extends State<RegisterPage> {
       return;
     }
 
-    final url = Uri.parse('http://10.0.2.2:8000/register'); // Android 模擬器使用 10.0.2.2
+    // 🔑 自動選 API URL
+    String apiUrl;
+    if (Platform.isAndroid) {
+      apiUrl = 'http://10.0.2.2:8000'; // Android 模擬器
+    } else if (Platform.isIOS) {
+      apiUrl = 'http://127.0.0.1:8000'; // iOS 模擬器
+    } else {
+      apiUrl = dotenv.env['API_URL'] ?? 'http://127.0.0.1:8000'; // 真機或 fallback
+    }
+
+    final url = Uri.parse('$apiUrl/register');   // ✅ 註冊呼叫 /register
+
     final body = {
       "username": _username.text,
       "account": _account.text,
@@ -82,7 +95,9 @@ class _RegisterPageState extends State<RegisterPage> {
       } else {
         final data = jsonDecode(response.body);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('註冊失敗: ${data['detail']}')),
+          SnackBar(
+              content: Text(
+                  '註冊失敗: ${data['detail'] ?? response.statusCode}')),
         );
       }
     } catch (e) {
@@ -148,9 +163,11 @@ class _RegisterPageState extends State<RegisterPage> {
                           obscureText: _obscure,
                           decoration: _input('密碼').copyWith(
                             suffixIcon: IconButton(
-                              icon: Icon(_obscure
-                                  ? Icons.visibility
-                                  : Icons.visibility_off),
+                              icon: Icon(
+                                _obscure
+                                    ? Icons.visibility
+                                    : Icons.visibility_off,
+                              ),
                               onPressed: () =>
                                   setState(() => _obscure = !_obscure),
                             ),

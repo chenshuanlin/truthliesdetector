@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';        // ✅ 新增：載入環境變數
 import 'package:truthliesdetector/screens/AIacc.dart';
 import 'package:truthliesdetector/screens/login_page.dart';
 import 'package:truthliesdetector/screens/register_page.dart';
@@ -15,9 +16,16 @@ import 'package:truthliesdetector/screens/settings_page.dart';
 import 'package:truthliesdetector/themes/ball.dart';
 import 'package:screenshot/screenshot.dart';
 
-void main() {
+Future<void> main() async {
+  // 確保 Flutter 綁定初始化
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // 載入 .env 檔
+  await dotenv.load(fileName: ".env");
+
   runApp(const MyApp());
 }
+
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -63,8 +71,8 @@ class MainLayout extends StatefulWidget {
 class _MainLayoutState extends State<MainLayout> {
   int _currentIndex = 0;
   final ScreenshotController _screenshotController = ScreenshotController();
-  
-  // 新增狀態變數來控制懸浮球的顯示
+
+  // 控制懸浮球顯示
   bool _showFab = true;
 
   final List<Widget> _pages = [
@@ -92,7 +100,6 @@ class _MainLayoutState extends State<MainLayout> {
           IconButton(
             icon: const Icon(Icons.notifications_none),
             onPressed: () {
-              // 導航到設定頁面
               Navigator.of(context).pushNamed(SettingsPage.route);
             },
           ),
@@ -119,20 +126,16 @@ class _MainLayoutState extends State<MainLayout> {
                 onTap: _onItemTapped,
               ),
             ),
-            // 根據 _showFab 狀態來顯示或隱藏懸浮球
             if (_showFab)
               FloatingActionMenu(
                 screenshotController: _screenshotController,
                 onTap: _onItemTapped,
-                // 提供 onClose 回呼函式來隱藏懸浮球
                 onClose: () {
                   setState(() {
                     _showFab = false;
                   });
                 },
               ),
-            
-            // 增加一個按鈕來重新顯示懸浮球
             if (!_showFab)
               Positioned(
                 bottom: 100,
@@ -153,7 +156,7 @@ class _MainLayoutState extends State<MainLayout> {
   }
 }
 
-/// ⬇️ 自訂導覽列 Widget
+/// 自訂導覽列
 class CustomBottomNavBar extends StatelessWidget {
   final int currentIndex;
   final Function(int) onTap;
@@ -204,7 +207,11 @@ class CustomBottomNavBar extends StatelessWidget {
                   border: Border.all(color: mainGreen, width: 4),
                 ),
                 child: Center(
-                  child: Image.asset("lib/assets/logo2.png", height: 60, fit: BoxFit.contain),
+                  child: Image.asset(
+                    "lib/assets/logo2.png",
+                    height: 60,
+                    fit: BoxFit.contain,
+                  ),
                 ),
               ),
             ),
@@ -225,7 +232,8 @@ class CustomBottomNavBar extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             label,
-            style: TextStyle(           fontSize: 12,
+            style: TextStyle(
+              fontSize: 12,
               color: Colors.white,
               fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
             ),
