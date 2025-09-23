@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 
-// 🔹 這裡可以依專案需要導入其他頁面
+// 🔹 導入其他頁面
 import 'home_page.dart';
-import  'profile_page.dart';
+import 'profile_page.dart';
 import 'AIacc.dart';
+import 'Article_page.dart'; 
 
 class SearchPage extends StatefulWidget {
   const SearchPage({super.key});
@@ -35,7 +36,7 @@ class _SearchPageState extends State<SearchPage> {
         "subtitle": "某新藥治療效果提高87%，多國醫療團隊證實......",
         "credibility": "低可信度",
         "content":
-            "某新藥治療效果據報提高87%，多國醫療團隊進行初步觀察，但尚未經過大規模臨床試驗或官方正式認證。",
+        "某新藥治療效果據報提高87%，多國醫療團隊進行初步觀察，但尚未經過大規模臨床試驗或官方正式認證。",
         "source": "健康日報",
         "time": "3小時前",
       },
@@ -44,7 +45,7 @@ class _SearchPageState extends State<SearchPage> {
         "subtitle": "多種藥物進入第三階段臨床試驗，療效尚待確認......",
         "credibility": "高可信度",
         "content":
-            "多種新冠肺炎治療藥物已進入第三階段臨床試驗，初步結果顯示部分藥物具有良好療效並且安全性可控。",
+        "多種新冠肺炎治療藥物已進入第三階段臨床試驗，初步結果顯示部分藥物具有良好療效並且安全性可控。",
         "source": "醫學期刊",
         "time": "昨天",
       },
@@ -53,7 +54,7 @@ class _SearchPageState extends State<SearchPage> {
         "subtitle": "數據顯示特效藥可減少30%住院率，但副作用問題......",
         "credibility": "中可信度",
         "content":
-            "最新研究顯示，新冠肺炎特效藥可降低約30%的住院率，但部分患者仍可能出現副作用，包括噁心、頭痛與疲倦。",
+        "最新研究顯示，新冠肺炎特效藥可降低約30%的住院率，但部分患者仍可能出現副作用，包括噁心、頭痛與疲倦。",
         "source": "科學報告",
         "time": "2天前",
       },
@@ -152,10 +153,11 @@ class _SearchPageState extends State<SearchPage> {
                 const Spacer(),
                 InkWell(
                   onTap: () {
+                    // ✅ 改成跳到 Article_page.dart 的 ArticleDetailPage
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => ArticleDetailPage(article: article),
+                        builder: (_) => const ArticleDetailPage(),
                       ),
                     );
                   },
@@ -165,7 +167,7 @@ class _SearchPageState extends State<SearchPage> {
                       shape: BoxShape.circle,
                       border: Border.all(color: credColor, width: 1.5),
                     ),
-                    child: Icon(Icons.keyboard_arrow_down, color: credColor, size: 20),
+                    child: Icon(Icons.keyboard_arrow_right, color: credColor, size: 20),
                   ),
                 ),
               ],
@@ -192,8 +194,6 @@ class _SearchPageState extends State<SearchPage> {
 
   @override
   Widget build(BuildContext context) {
-    // ⚠️ 注意：由於 MainLayout 已經提供 Scaffold、AppBar 和 Drawer，
-    // SearchPage 內部不再需要 Scaffold。
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Column(
@@ -226,12 +226,12 @@ class _SearchPageState extends State<SearchPage> {
           ),
           const SizedBox(height: 16),
           _buildFilterSection("可信度篩選", ["高可信度", "中可信度", "低可信度"], selectedConfidence,
-              (val) => setState(() => selectedConfidence = val)),
+                  (val) => setState(() => selectedConfidence = val)),
           _buildFilterSection("發布時間", ["今天", "本週", "本月"], selectedTime,
-              (val) => setState(() => selectedTime = val)),
+                  (val) => setState(() => selectedTime = val)),
           _buildFilterSection("主題類別",
               ["醫療", "研究", "新聞", "政策", "國際", "科技"], selectedCategory,
-              (val) => setState(() => selectedCategory = val)),
+                  (val) => setState(() => selectedCategory = val)),
           const SizedBox(height: 10),
           Row(
             children: [
@@ -252,42 +252,6 @@ class _SearchPageState extends State<SearchPage> {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-// 新聞完整頁
-class ArticleDetailPage extends StatelessWidget {
-  final Map<String, String> article;
-
-  const ArticleDetailPage({super.key, required this.article});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF9EB79E),
-        title: Text(article["title"] ?? "新聞詳情"),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(article["title"] ?? "",
-                  style: const TextStyle(
-                      fontSize: 20, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              Text("${article["source"]}・${article["time"]}",
-                  style: const TextStyle(color: Colors.grey)),
-              const SizedBox(height: 16),
-              Text(article["content"] ?? "",
-                  style: const TextStyle(fontSize: 16, height: 1.5)),
-            ],
-          ),
-        ),
       ),
     );
   }
