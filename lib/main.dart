@@ -61,7 +61,7 @@ class MainLayout extends StatefulWidget {
 class _MainLayoutState extends State<MainLayout> {
   int _currentIndex = 0;
   final ScreenshotController _screenshotController = ScreenshotController();
-  
+
   // 新增狀態變數來控制懸浮球的顯示
   bool _showFab = true;
 
@@ -104,9 +104,13 @@ class _MainLayoutState extends State<MainLayout> {
         controller: _screenshotController,
         child: Stack(
           children: [
-            IndexedStack(
-              index: _currentIndex,
-              children: _pages,
+            // 使用 Padding 包裹 IndexedStack，以在底部留出空間
+            Padding(
+              padding: const EdgeInsets.only(bottom: 80),
+              child: IndexedStack(
+                index: _currentIndex,
+                children: _pages,
+              ),
             ),
             Positioned(
               bottom: 0,
@@ -129,7 +133,7 @@ class _MainLayoutState extends State<MainLayout> {
                   });
                 },
               ),
-            
+
             // 增加一個按鈕來重新顯示懸浮球
             if (!_showFab)
               Positioned(

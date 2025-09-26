@@ -187,7 +187,7 @@ class _AIaccState extends State<AIacc> {
                             Navigator.of(context).pop();
                           }
                         },
-                        child: const Icon(Icons.arrow_back_ios, color: Colors.white),
+                        //child: const Icon(Icons.arrow_back_ios, color: Colors.white),
                       ),
                     ),
                   ),

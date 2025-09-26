@@ -8,7 +8,7 @@ import 'package:truthliesdetector/themes/app_colors.dart'; // 假設你的 AppCo
 class Article {
   final String title;
   final String publishDate;
-  final int credibilityScore;
+  final double credibilityScore;
   final String aiAnalysis;
   final String content;
   final List<String> similarNews;
@@ -49,7 +49,7 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
   final Article _article = Article(
     title: "新冠疫苗含有微型晶片追蹤人體活動?",
     publishDate: "2025-05-20 08:30",
-    credibilityScore: 15,
+    credibilityScore: 0.3,
     aiAnalysis: "依據多項權威資料判斷，該說法屬於錯誤訊息，可信度極低。所謂“疫苗含有微型晶片”，缺乏任何科學依據，專家一致認為這是典型的謠言訊息。",
     content: "【本報訊】\n\n近期，網傳謠言稱新冠疫苗含有微型晶片可以追蹤人體活動，甚至聲稱疫苗接種卡是一種國際監控工具。...\n\n相關調查顯示，疫苗晶片說法最早出現在部分海外社群媒體，經過轉發和加工，迅速傳入國內，引發恐慌。...\n\n目前國內《疫苗管理法》《傳染病防治法》等均對疫苗管理有明確規範。醫學界強調，接種新冠疫苗的主要目的是預防感染和重症...",
     similarNews: [
@@ -97,7 +97,7 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
     return Scaffold(
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
-        backgroundColor: AppColors.appBarGreen,
+        backgroundColor: AppColors.primaryGreen,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
@@ -221,7 +221,7 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
                 Text("可信度評分：${_article.credibilityScore}分",
                     style: const TextStyle(fontSize: 14, color: Colors.black87)),
                 const SizedBox(width: 4),
-                Text("（滿分100分）",
+                Text("（滿分1分）",
                     style: TextStyle(fontSize: 12, color: Colors.grey[600])),
               ],
             ),
