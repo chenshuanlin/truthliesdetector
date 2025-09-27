@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:truthliesdetector/screens/AIacc.dart';
 import 'package:truthliesdetector/screens/login_page.dart';
+//import 'package:truthliesdetector/screens/Article_page.dart';
 import 'package:truthliesdetector/screens/search_page.dart';
 import 'package:truthliesdetector/screens/collect_page.dart';
 import 'package:truthliesdetector/screens/history_page.dart';
