@@ -11,6 +11,7 @@ import 'package:truthliesdetector/screens/splash_page.dart';
 import 'package:truthliesdetector/themes/app_colors.dart';
 import 'package:truthliesdetector/screens/AIchat.dart';
 import 'package:truthliesdetector/themes/app_drawer.dart';
+import 'package:truthliesdetector/screens/ai_report_page.dart'; // <<< 新增：導入 AI 報告頁面
 import 'package:truthliesdetector/screens/settings_page.dart';
 import 'package:truthliesdetector/themes/ball.dart';
 import 'package:screenshot/screenshot.dart';
@@ -44,6 +45,7 @@ class MyApp extends StatelessWidget {
         HistoryPage.route: (context) => const HistoryPage(),
         ProfilePage.route: (context) => const ProfilePage(),
         AIchat.route: (context) => const AIchat(initialQuery: ''),
+        AiReportPage.route: (context) => const AiReportPage(), // <<< 新增：註冊 AI 報告頁面路由
         SettingsPage.route: (context) => const SettingsPage(),
       },
       debugShowCheckedModeBanner: false,
@@ -68,8 +70,10 @@ class _MainLayoutState extends State<MainLayout> {
 
   final List<Widget> _pages = [
     const HomePage(),
-    const HistoryPage(),
-    const AIacc(),
+    const AiReportPage(), // Index 1: 將「發現」頁面替換為 AiReportPage (AI報告與趨勢分析)
+    // TODO: 如果要將中間按鈕 (Index 2) 導向新的 AI 報告頁面，請將下一行註解，並取消再下一行的註解
+    // const AiReportPage(),
+    const AIacc(), 
     const SearchPage(),
     const ProfilePage(),
   ];
@@ -156,7 +160,7 @@ class _MainLayoutState extends State<MainLayout> {
   }
 }
 
-/// ⬇️ 自訂導覽列 Widget
+/// ⬇️ 自訂導覽列 Widget (保持不變)
 class CustomBottomNavBar extends StatelessWidget {
   final int currentIndex;
   final Function(int) onTap;
@@ -228,7 +232,8 @@ class CustomBottomNavBar extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             label,
-            style: TextStyle(           fontSize: 12,
+            style: TextStyle(
+              fontSize: 12, 
               color: Colors.white,
               fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
             ),
