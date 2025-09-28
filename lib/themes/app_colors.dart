@@ -24,7 +24,7 @@ MaterialColor createMaterialColor(Color color) {
 /// 應用程式中使用的所有顏色常數
 class AppColors {
   // 主要色系
-  static const Color primaryGreen = Color(0xFF7CB342); // 更亮、更有活力的綠色
+  static const Color primaryGreen = Color(0xFF8BA88E); // 更亮、更有活力的綠色
   static const Color primaryGreen2 = Color(0xFF9CCC65); // 次要/強調綠色
   static const Color accentGreen = Color(0xFFC8E6C9); // 輔助/淡綠色
 

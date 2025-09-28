@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:truthliesdetector/themes/app_colors.dart'; // 假設你的 AppColors 在這裡
+import 'package:screenshot/screenshot.dart'; // 導入 Screenshot 套件
+import 'package:truthliesdetector/themes/ball.dart'; // 假設你的 FloatingActionMenu 在這個檔案中
 
 // 這裡只保留 Article 和 Comment 類別，因為它們是 ArticleDetailPage 獨有的資料模型
 // 如果你的專案中有獨立的資料模型檔案，你也可以將它們移過去。
@@ -46,6 +48,11 @@ class ArticleDetailPage extends StatefulWidget {
 }
 
 class _ArticleDetailPageState extends State<ArticleDetailPage> {
+  // <<< 新增：懸浮球相關狀態變數和控制器
+  final ScreenshotController _screenshotController = ScreenshotController();
+  bool _showFab = true;
+  // >>>
+
   final Article _article = Article(
     title: "新冠疫苗含有微型晶片追蹤人體活動?",
     publishDate: "2025-05-20 08:30",
@@ -134,9 +141,11 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
           const SizedBox(width: 8),
         ],
       ),
-      body: Column(
+      // <<< 改變：使用 Stack 包裹 body
+      body: Stack(
         children: [
-          Expanded(
+          Screenshot(
+            controller: _screenshotController,
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -151,22 +160,57 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
                   _buildSimilarNews(),
                   const SizedBox(height: 20),
                   _buildCommentSection(),
+                  const SizedBox(height: 80), // 留出空間給懸浮球
                 ],
               ),
             ),
           ),
+          // 根據 _showFab 狀態來顯示或隱藏懸浮球
+          if (_showFab)
+            FloatingActionMenu(
+              screenshotController: _screenshotController,
+              // 因為在文章頁面，懸浮球的功能可能與主頁不同，
+              // 這裡只簡單提供 onClose 回呼函式。
+              // 你可以根據需要為 onTap 傳入導航邏輯。
+              onTap: (int index) {
+                // 例如：處理不同按鈕的導航
+              },
+              onClose: () {
+                setState(() {
+                  _showFab = false;
+                });
+              },
+            ),
+          // 增加一個按鈕來重新顯示懸浮球
+          if (!_showFab)
+            Positioned(
+              bottom: 20,
+              right: 20,
+              child: FloatingActionButton(
+                onPressed: () {
+                  setState(() {
+                    _showFab = true;
+                  });
+                },
+                backgroundColor: AppColors.primaryGreen,
+                child: const Icon(Icons.apps, color: Colors.white),
+              ),
+            ),
         ],
       ),
+      // >>>
     );
   }
 
   Widget _buildTitle() {
     String credibilityText;
     Color credibilityColor;
-    if (_article.credibilityScore > 70) {
+    // 這裡的 credibilityScore 應除以 100 來匹配 0-1 區間
+    // 但你的範例資料是 0.3，所以這裡的邏輯需要調整
+    if (_article.credibilityScore > 0.7) { // 將 70 調整為 0.7
       credibilityText = "高可信度";
       credibilityColor = AppColors.deepGreen;
-    } else if (_article.credibilityScore > 40) {
+    } else if (_article.credibilityScore > 0.4) { // 將 40 調整為 0.4
       credibilityText = "中等可信度";
       credibilityColor = Colors.orange;
     } else {
@@ -227,12 +271,12 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
             ),
             const SizedBox(height: 8),
             LinearProgressIndicator(
-              value: _article.credibilityScore / 100,
+              value: _article.credibilityScore, // 這裡可以直接使用，因為資料是 0-1
               backgroundColor: Colors.grey[200],
               valueColor: AlwaysStoppedAnimation<Color>(
-                  _article.credibilityScore > 70
+                  _article.credibilityScore > 0.7
                       ? AppColors.deepGreen
-                      : (_article.credibilityScore > 40 ? Colors.orange : AppColors.dangerRed)),
+                      : (_article.credibilityScore > 0.4 ? Colors.orange : AppColors.dangerRed)),
             ),
             const SizedBox(height: 12),
             Text(
