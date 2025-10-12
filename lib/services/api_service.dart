@@ -64,6 +64,54 @@ class ApiService {
     return resp.statusCode == 200;
   }
 
+  Future<Map<String, dynamic>?> analyzeNews(String newsUrl) async {
+    final url = Uri.parse('$baseUrl/api/analyze-news');
+    final resp = await http.post(url, headers: {'Content-Type': 'application/json'}, body: jsonEncode({
+      'url': newsUrl,
+    }));
+    if (resp.statusCode == 200) {
+      final data = jsonDecode(resp.body);
+      return data['analysis'];
+    }
+    return null;
+  }
+
+  Future<Map<String, dynamic>?> getFakeNewsStats() async {
+    final url = Uri.parse('$baseUrl/api/fake-news-stats');
+    print('正在請求: $url');
+    try {
+      final resp = await http.get(url);
+      print('API 回應狀態碼: ${resp.statusCode}');
+      print('API 回應內容: ${resp.body}');
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body);
+        return data['stats'];
+      }
+      return null;
+    } catch (e) {
+      print('API 請求錯誤: $e');
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>?> analyzeImage({String? imageUrl, String? imageBase64}) async {
+    final url = Uri.parse('$baseUrl/api/image-check');
+    try {
+      final payload = <String, dynamic>{};
+      if (imageUrl != null) payload['url'] = imageUrl;
+      if (imageBase64 != null) payload['imageBase64'] = imageBase64;
+      final resp = await http.post(url, headers: {'Content-Type': 'application/json'}, body: jsonEncode(payload));
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        return data['result'] as Map<String, dynamic>? ?? data;
+      }
+      return null;
+    } catch (e) {
+      print('analyzeImage error: $e');
+      return null;
+    }
+  }
+
   User _userFromMap(Map<String, dynamic> map) {
     return User(
       userId: map['user_id'] as int?,

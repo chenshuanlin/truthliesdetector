@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 // 假設您的 AppColors 定義在這個路徑下，以解決重複定義問題。
 import 'package:truthliesdetector/themes/app_colors.dart';
+import 'package:truthliesdetector/services/api_service.dart';
 import 'dart:math';
 
 // 顏色擴展方法 (用於計算顏色的深淺)
@@ -46,36 +47,176 @@ class AiReportPage extends StatefulWidget {
 
 class _AiReportPageState extends State<AiReportPage> {
   int _selectedTabIndex = 0;
+  final ApiService _apiService = ApiService.getInstance();
+  Map<String, dynamic>? _statsData;
+  bool _isLoading = true;
 
-  // 報告內容數據
-  final Map<int, Map<String, dynamic>> _reportData = {
-    0: {
-      'title': '假訊息監測完整報告 (週報)',
-      'content': '本週共偵測到 **157** 條疑似假訊息，其中 **32 條**經 AI 交叉比對後確認為假消息，相較上週增長 **18%**。主要增長點集中在政治和健康類別。\n\n**熱門趨勢分析:**\n* 健康與疫苗 (38%): 主要散佈在私人訊息群組，內容涉及未經證實的療法。\n* 選舉與政治 (29%): 多數源於社群媒體，與特定候選人或政策相關。\n* 經濟相關 (18%): 主要為投資誘餌和市場謠言。\n\n**建議:** 立即對高傳播風險的「健康類假訊息」進行人工複核和澄清。',
-      'chart_data': [
+  @override
+  void initState() {
+    super.initState();
+    _loadStatsData();
+  }
+
+  Future<void> _loadStatsData() async {
+    setState(() {
+      _isLoading = true;
+    });
+    
+    try {
+      print('開始載入統計數據...');
+      final stats = await _apiService.getFakeNewsStats();
+      print('API 回傳數據: $stats');
+      setState(() {
+        _statsData = stats;
+        _isLoading = false;
+      });
+      print('數據載入完成');
+    } catch (e) {
+      print('Error loading stats: $e');
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  // 從 API 數據生成報告內容
+  Map<int, Map<String, dynamic>> get _reportData {
+    if (_statsData == null) {
+      return _getDefaultReportData();
+    }
+
+    final stats = _statsData!;
+    final weeklyReports = stats['weeklyReports'] as List<dynamic>? ?? [];
+    final totalVerified = stats['totalVerified'] as int? ?? 32;
+    final totalSuspicious = stats['totalSuspicious'] as int? ?? 125;
+    final aiAccuracy = stats['aiAccuracy'] as int? ?? 86;
+  final topCategories = stats['topCategories'] as List<dynamic>? ?? [];
+  final propagationChannels = stats['propagationChannels'] as List<dynamic>? ?? [];
+
+    // 動態產生折線圖資料（以 verified+suspicious 為熱度）
+  final List<double> lineChartData = weeklyReports.isNotEmpty
+    ? weeklyReports.map((r) => ((r['verified'] ?? 0) + (r['suspicious'] ?? 0)).toDouble()).toList(growable: false).cast<double>()
+    : [10.0, 15.0, 12.0, 20.0, 25.0, 22.0, 28.0];
+
+    // 動態產生圓餅圖資料（以 topCategories）
+    final List<ChartData> pieChartData = propagationChannels.isNotEmpty
+        ? propagationChannels.map<ChartData>((c) {
+            final name = c['channel']?.toString() ?? '';
+            final percent = (c['percentage'] is num) ? (c['percentage'] as num).toDouble() : 0.0;
+            final color = name.contains('社群') ? AppColors.dangerRed : (name.contains('私人') ? AppColors.primaryGreen : AppColors.userGray);
+            return ChartData(name, percent, color);
+          }).toList()
+        : [
+            ChartData('社群媒體', 45, AppColors.primaryGreen),
+            ChartData('私人訊息群組', 30, AppColors.primaryGreen2),
+            ChartData('傳統媒體', 25, AppColors.userGray),
+          ];
+
+    // 動態產生週報標題（自動帶入今天日期）
+    final now = DateTime.now();
+    final weekTitle = '假訊息監測完整報告 (週報) - ${now.year}/${now.month.toString().padLeft(2, '0')}/${now.day.toString().padLeft(2, '0')}';
+
+    // 動態產生熱門趨勢分析
+    String buildCategoryDesc(List<dynamic> cats) {
+      if (cats.isEmpty) return '（本週無顯著主題）';
+      return cats.map((cat) {
+        final name = cat['name'] ?? '';
+        final percent = cat['percentage'] ?? 0;
+        return '・$name（$percent%）';
+      }).join('\n');
+    }
+
+    // 動態產生情感分佈（如有）
+    String buildSentimentDesc() {
+      // 這裡可根據 stats['sentiment'] 等欄位自動組裝，暫時寫死
+      return '* 中性: 65%\n* 負面: 25%\n* 正面: 10%';
+    }
+
+    return {
+      0: {
+        'title': weekTitle,
+        'content': '本週共偵測到 **${totalVerified + totalSuspicious}** 條疑似假訊息，其中 **$totalVerified 條**經 AI 交叉比對後確認為假消息，AI 準確率達 **$aiAccuracy%**。\n\n**熱門趨勢分析:**\n${buildCategoryDesc(topCategories)}\n\n**建議:** 立即對高傳播風險的假訊息進行人工複核和澄清。',
+        'chart_data': _buildWeeklyChartData(weeklyReports),
+        'chart_type': 'bar',
+      },
+      1: {
+        'title': '新聞趨勢與熱度完整分析',
+        'content': '本週新聞總量相較上週增長 **15%**。熱度最高的關鍵詞如下：\n${buildCategoryDesc(topCategories)}\n\n**情感分佈:**\n${buildSentimentDesc()}\n\n**預測:** 預計下週主題將持續主導輿論，建議準備相關事實查核素材，以防衍生假消息。',
+        'chart_data': lineChartData,
+        'chart_type': 'line',
+      },
+      2: {
+        'title': '假訊息傳播網路完整報告',
+        'content': '傳播速度比上週加快 **25%**。\n\n**主要傳播途徑分佈:**\n${(propagationChannels.isNotEmpty ? propagationChannels : [
+          {'channel': '社群媒體', 'percentage': 45},
+          {'channel': '私人訊息群組', 'percentage': 30},
+          {'channel': '傳統媒體/網站', 'percentage': 25},
+        ]).map((c) => '* ${c['channel']} (${c['percentage']}%)').join('\n')}\n\n**高風險節點:** 「KOL_金融達人」和「匿名論壇」被識別為本週最主要的假訊息擴散源頭。',
+        'chart_data': pieChartData,
+        'chart_type': 'pie',
+      },
+    };
+  }
+
+  List<BarData> _buildWeeklyChartData(List<dynamic> weeklyReports) {
+    if (weeklyReports.isEmpty) {
+      return [
         BarData(50, false, '一'), BarData(75, true, '二'), BarData(60, false, '三'),
         BarData(85, true, '四'), BarData(70, true, '五'), BarData(55, false, '六'),
         BarData(45, true, '日'),
-      ],
-      'chart_type': 'bar',
-    },
-    1: {
-      'title': '新聞趨勢與熱度完整分析',
-      'content': '本週新聞總量相較上週增長 **15%**。熱度最高的關鍵詞是「能源政策」，熱度增長達 **45%**。\n\n**情感分佈:**\n* 中性: 65%\n* 負面: 25% (集中在國際貿易協定)\n* 正面: 10%\n\n**預測:** 預計下週「能源政策」將持續主導輿論，建議準備相關事實查核素材，以防衍生假消息。',
-      'chart_data': [10.0, 15.0, 12.0, 20.0, 25.0, 22.0, 28.0],
-      'chart_type': 'line',
-    },
-    2: {
-      'title': '假訊息傳播網路完整報告',
-      'content': '傳播速度比上週加快 **25%**。健康類假訊息 (來自 LINE 群組) 在 48 小時內達到峰值。\n\n**主要傳播途徑分佈:**\n* 社群媒體 (Facebook, X): 45%\n* 私人訊息群組 (LINE, Telegram): 30%\n* 傳統媒體/網站: 25%\n\n**高風險節點:** 「KOL\_金融達人」和「匿名論壇」被識別為本週最主要的假訊息擴散源頭。',
-      'chart_data': [
-        ChartData('社群媒體', 45, AppColors.primaryGreen),
-        ChartData('私人訊息群組', 30, AppColors.primaryGreen2),
-        ChartData('傳統媒體', 25, AppColors.userGray),
-      ],
-      'chart_type': 'pie',
-    },
-  };
+      ];
+    }
+
+    return weeklyReports.map((report) {
+      final day = report['day'] as String? ?? '';
+      final suspicious = (report['suspicious'] as int? ?? 0).toDouble();
+      final isHighRisk = suspicious > 20;
+      return BarData(suspicious, isHighRisk, day);
+    }).toList();
+  }
+
+  String _buildCategoriesText(List<dynamic> categories) {
+    if (categories.isEmpty) {
+      return '* 健康與疫苗 (38%): 主要散佈在私人訊息群組，內容涉及未經證實的療法。\n* 選舉與政治 (29%): 多數源於社群媒體，與特定候選人或政策相關。';
+    }
+
+    return categories.map((cat) {
+      final name = cat['name'] as String? ?? '';
+      final percentage = cat['percentage'] as int? ?? 0;
+      return '* $name ($percentage%)';
+    }).join('\n');
+  }
+
+  Map<int, Map<String, dynamic>> _getDefaultReportData() {
+    return {
+      0: {
+        'title': '假訊息監測完整報告 (週報)',
+        'content': '本週共偵測到 **157** 條疑似假訊息，其中 **32 條**經 AI 交叉比對後確認為假消息，相較上週增長 **18%**。主要增長點集中在政治和健康類別。\n\n**熱門趨勢分析:**\n* 健康與疫苗 (38%): 主要散佈在私人訊息群組，內容涉及未經證實的療法。\n* 選舉與政治 (29%): 多數源於社群媒體，與特定候選人或政策相關。\n* 經濟相關 (18%): 主要為投資誘餌和市場謠言。\n\n**建議:** 立即對高傳播風險的「健康類假訊息」進行人工複核和澄清。',
+        'chart_data': [
+          BarData(50, false, '一'), BarData(75, true, '二'), BarData(60, false, '三'),
+          BarData(85, true, '四'), BarData(70, true, '五'), BarData(55, false, '六'),
+          BarData(45, true, '日'),
+        ],
+        'chart_type': 'bar',
+      },
+      1: {
+        'title': '新聞趨勢與熱度完整分析',
+        'content': '本週新聞總量相較上週增長 **15%**。熱度最高的關鍵詞是「能源政策」，熱度增長達 **45%**。\n\n**情感分佈:**\n* 中性: 65%\n* 負面: 25% (集中在國際貿易協定)\n* 正面: 10%\n\n**預測:** 預計下週「能源政策」將持續主導輿論，建議準備相關事實查核素材，以防衍生假消息。',
+        'chart_data': [10.0, 15.0, 12.0, 20.0, 25.0, 22.0, 28.0],
+        'chart_type': 'line',
+      },
+      2: {
+        'title': '假訊息傳播網路完整報告',
+        'content': '傳播速度比上週加快 **25%**。健康類假訊息 (來自 LINE 群組) 在 48 小時內達到峰值。\n\n**主要傳播途徑分佈:**\n* 社群媒體 (Facebook, X): 45%\n* 私人訊息群組 (LINE, Telegram): 30%\n* 傳統媒體/網站: 25%\n\n**高風險節點:** 「KOL\_金融達人」和「匿名論壇」被識別為本週最主要的假訊息擴散源頭。',
+        'chart_data': [
+          ChartData('社群媒體', 45, AppColors.primaryGreen),
+          ChartData('私人訊息群組', 30, AppColors.primaryGreen2),
+          ChartData('傳統媒體', 25, AppColors.userGray),
+        ],
+        'chart_type': 'pie',
+      },
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -96,18 +237,63 @@ class _AiReportPageState extends State<AiReportPage> {
           icon: const Icon(Icons.arrow_back_ios_new, color: AppColors.darkText),
           onPressed: () => Navigator.of(context).pop(),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh, color: AppColors.darkText),
+            onPressed: _loadStatsData,
+          ),
+        ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 0.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildSegmentedControl(),
-            const SizedBox(height: 20),
-            _buildCurrentContent(),
-          ],
-        ),
-      ),
+      body: _isLoading
+          ? const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(color: AppColors.primaryGreen),
+                  SizedBox(height: 16),
+                  Text('正在載入最新數據...', style: TextStyle(color: AppColors.darkText)),
+                ],
+              ),
+            )
+          : Column(
+              children: [
+                // Debug 資訊顯示
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  margin: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryGreen.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppColors.primaryGreen, width: 1),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('🔍 Debug 資訊', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.darkText)),
+                      const SizedBox(height: 8),
+                      Text('API Base URL: ${_apiService.baseUrl}', style: TextStyle(fontSize: 12, color: AppColors.darkText)),
+                      Text('數據來源: ${_statsData != null ? "API" : "預設"}', style: TextStyle(fontSize: 12, color: AppColors.darkText)),
+                      if (_statsData != null) 
+                        Text('載入時間: ${DateTime.now().toString().substring(0, 19)}', style: TextStyle(fontSize: 12, color: AppColors.darkText)),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 0.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildSegmentedControl(),
+                        const SizedBox(height: 20),
+                        _buildCurrentContent(),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
     );
   }
 
@@ -179,17 +365,12 @@ class _AiReportPageState extends State<AiReportPage> {
 
   // MARK: Tab 0: 假訊息偵測 (包含 Bar Chart & Topics List)
   Widget _buildDetectionReportContent() {
-    // 模擬週報數據: Bar Chart
+
+    // 週報數據: Bar Chart
     final List<BarData> weeklyData = _reportData[0]?['chart_data'];
 
-    // 模擬熱門主題數據: Topics List
-    final List<ChartData> topicData = [
-      ChartData('健康與疫苗相關假訊息', 38, AppColors.dangerRed),
-      ChartData('選舉與政治相關假訊息', 29, AppColors.dangerRed.darken(0.1)),
-      ChartData('經濟相關假訊息', 18, AppColors.primaryGreen),
-      ChartData('國際關係', 10, AppColors.primaryGreen2),
-      ChartData('社會事件', 5, AppColors.userGray),
-    ];
+    // 熱門主題數據: 完全動態從 API 取得
+    final List<dynamic> topCategories = _statsData?['topCategories'] ?? [];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -198,7 +379,7 @@ class _AiReportPageState extends State<AiReportPage> {
         _buildVisualCard(
           title: '本週假訊息監測報告',
           onViewAll: () => _showFullReportModal(),
-          child: AiBarChart(data: weeklyData), // 使用可互動的 BarChart
+          child: AiBarChart(data: weeklyData),
         ),
         const SizedBox(height: 15),
 
@@ -206,11 +387,49 @@ class _AiReportPageState extends State<AiReportPage> {
         _buildMetricsCards(),
         const SizedBox(height: 15),
 
-        // 3. 熱門假訊息主題 (List with vertical bars)
+        // 3. 熱門假訊息主題 (完全動態)
         _buildVisualCard(
           title: '熱門假訊息主題',
           child: Column(
-            children: topicData.sublist(0, 3).map((d) => _TopicListItem(data: d)).toList(),
+            children: topCategories.isNotEmpty
+                ? topCategories.map<Widget>((cat) {
+                    final name = cat['name']?.toString() ?? '';
+                    final percent = cat['percentage']?.toString() ?? '';
+                    final color = (cat['percentage'] is num && (cat['percentage'] as num) >= 30)
+                        ? AppColors.dangerRed
+                        : AppColors.primaryGreen;
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 6.0),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 6,
+                            height: 24,
+                            decoration: BoxDecoration(
+                              color: color,
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              name,
+                              style: const TextStyle(fontSize: 16, color: AppColors.darkText),
+                            ),
+                          ),
+                          Text(
+                            '$percent%',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: color,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList()
+                : [const Text('（本週無顯著主題）', style: TextStyle(color: AppColors.userGray))],
           ),
         ),
         const SizedBox(height: 20),
@@ -333,30 +552,36 @@ class _AiReportPageState extends State<AiReportPage> {
 
   // 關鍵指標卡片
   Widget _buildMetricsCards() {
-    return const Row(
+    // 取用 API 數據
+    final stats = _statsData;
+    final totalVerified = stats?['totalVerified']?.toString() ?? '--';
+    final totalSuspicious = stats?['totalSuspicious']?.toString() ?? '--';
+    final aiAccuracy = stats?['aiAccuracy']?.toString() ?? '--';
+    // TODO: trend 數據如有需要可從 API 擴充
+    return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         // 已確認假訊息 (DangerRed)
         _MetricCard(
-          value: '32',
+          value: totalVerified,
           label: '已確認假訊息',
-          trend: '+18% \u25B2',
+          trend: '+18% \u25B2', // 可改為動態
           color: AppColors.dangerRed,
         ),
-        SizedBox(width: 10),
+        const SizedBox(width: 10),
         // 待查證訊息 (UserGray - 偏中性)
         _MetricCard(
-          value: '125',
+          value: totalSuspicious,
           label: '待查證訊息',
-          trend: '+5% \u25B2',
+          trend: '+5% \u25B2', // 可改為動態
           color: AppColors.userGray,
         ),
-        SizedBox(width: 10),
+        const SizedBox(width: 10),
         // AI 辨識率 (PrimaryGreen2)
         _MetricCard(
-          value: '86%',
+          value: aiAccuracy != '--' ? '$aiAccuracy%' : '--',
           label: 'AI 辨識率',
-          trend: '+12% \u25B2',
+          trend: '+12% \u25B2', // 可改為動態
           color: AppColors.primaryGreen2,
         ),
       ],
@@ -943,9 +1168,9 @@ class _FullReportModalState extends State<FullReportModal> with SingleTickerProv
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            '--- 報告生成於 2025/09/27 (AI模擬數據) ---',
-            style: TextStyle(color: AppColors.userGray, fontSize: 12),
+          Text(
+            '--- 報告生成於 ${DateTime.now().year}/${DateTime.now().month.toString().padLeft(2, '0')}/${DateTime.now().day.toString().padLeft(2, '0')} (API 數據) ---',
+            style: const TextStyle(color: AppColors.userGray, fontSize: 12),
           ),
           const SizedBox(height: 10),
           Text(
