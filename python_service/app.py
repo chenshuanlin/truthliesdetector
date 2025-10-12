@@ -13,6 +13,8 @@ def create_app():
     CORS(app, supports_credentials=True)
     db.init_app(app)
     app.register_blueprint(auth_bp, url_prefix='/api')
+    # register image analysis route for flask run
+    app = register_image_route(app)
     return app
 
 
