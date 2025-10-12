@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:truthliesdetector/providers/user_provider.dart';
+import 'package:truthliesdetector/models/user.dart';
 import 'package:truthliesdetector/screens/login_page.dart';
 
 const _sage = Color(0xFF9EB79E);
@@ -44,7 +47,7 @@ class _RegisterPageState extends State<RegisterPage> {
         ),
       );
 
-  void _register() {
+  void _register() async {
     if (_formKey.currentState!.validate()) {
       if (!_agree) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -53,14 +56,73 @@ class _RegisterPageState extends State<RegisterPage> {
         return;
       }
 
-      // ✅ 註冊成功
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('註冊成功！請登入')),
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
+      
+      // 顯示載入指示器
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
+        ),
       );
 
-      Future.delayed(const Duration(seconds: 1), () {
-        Navigator.pushReplacementNamed(context, LoginPage.route);
-      });
+      try {
+        // 建立用戶物件
+        final user = User(
+          account: _account.text,
+          username: _username.text,
+          password: _password.text,
+          email: _email.text,
+          phone: _phone.text.isEmpty ? null : _phone.text,
+        );
+
+        final result = await userProvider.register(user);
+        
+        // 關閉載入指示器
+        if (mounted) Navigator.of(context).pop();
+
+        if (result == 'success') {
+          // 註冊成功
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('註冊成功！請登入'),
+                backgroundColor: Colors.green,
+              ),
+            );
+
+            Future.delayed(const Duration(seconds: 1), () {
+              if (mounted) {
+                Navigator.pushReplacementNamed(context, LoginPage.route);
+              }
+            });
+          }
+        } else {
+          // 註冊失敗，顯示具體錯誤訊息
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(result),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        }
+      } catch (e) {
+        // 關閉載入指示器
+        if (mounted) Navigator.of(context).pop();
+        
+        // 顯示錯誤訊息
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('註冊失敗：$e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
     }
   }
 

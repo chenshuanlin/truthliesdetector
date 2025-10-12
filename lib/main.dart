@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:truthliesdetector/providers/user_provider.dart';
 import 'package:truthliesdetector/screens/AIacc.dart';
 import 'package:truthliesdetector/screens/login_page.dart';
+import 'package:truthliesdetector/screens/register_page.dart';
 //import 'package:truthliesdetector/screens/Article_page.dart';
 import 'package:truthliesdetector/screens/search_page.dart';
 import 'package:truthliesdetector/screens/collect_page.dart';
@@ -13,6 +16,7 @@ import 'package:truthliesdetector/screens/AIchat.dart';
 import 'package:truthliesdetector/themes/app_drawer.dart';
 import 'package:truthliesdetector/screens/ai_report_page.dart'; // <<< 新增：導入 AI 報告頁面
 import 'package:truthliesdetector/screens/settings_page.dart';
+import 'package:truthliesdetector/screens/database_test_page.dart';
 import 'package:truthliesdetector/themes/ball.dart';
 import 'package:screenshot/screenshot.dart';
 
@@ -25,30 +29,34 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Truths and Lies Detector',
-      theme: ThemeData(
-        primaryColor: AppColors.primaryGreen,
-        colorScheme: const ColorScheme.light(
-          primary: AppColors.primaryGreen,
+    return ChangeNotifierProvider(
+      create: (context) => UserProvider(),
+      child: MaterialApp(
+        title: 'Truths and Lies Detector',
+        theme: ThemeData(
+          primaryColor: AppColors.primaryGreen,
+          colorScheme: const ColorScheme.light(
+            primary: AppColors.primaryGreen,
+          ),
+          fontFamily: 'NotoSansSC',
+          useMaterial3: true,
         ),
-        fontFamily: 'NotoSansSC',
-        useMaterial3: true,
+        initialRoute: SplashPage.route,
+        routes: {
+          SplashPage.route: (context) => const SplashPage(),
+          LoginPage.route: (context) => const LoginPage(),
+          RegisterPage.route: (context) => const RegisterPage(),
+          MainLayout.route: (context) => const MainLayout(),
+          SearchPage.route: (context) => const SearchPage(),
+          CollectPage.route: (context) => const CollectPage(),
+          HistoryPage.route: (context) => const HistoryPage(),
+          ProfilePage.route: (context) => const ProfilePage(),
+          AIchat.route: (context) => const AIchat(initialQuery: ''),
+          AiReportPage.route: (context) => const AiReportPage(), // <<< 新增：註冊 AI 報告頁面路由
+          SettingsPage.route: (context) => const SettingsPage(),
+        },
+        debugShowCheckedModeBanner: false,
       ),
-      initialRoute: SplashPage.route,
-      routes: {
-        SplashPage.route: (context) => const SplashPage(),
-        LoginPage.route: (context) => const LoginPage(),
-        MainLayout.route: (context) => const MainLayout(),
-        SearchPage.route: (context) => const SearchPage(),
-        CollectPage.route: (context) => const CollectPage(),
-        HistoryPage.route: (context) => const HistoryPage(),
-        ProfilePage.route: (context) => const ProfilePage(),
-        AIchat.route: (context) => const AIchat(initialQuery: ''),
-        AiReportPage.route: (context) => const AiReportPage(), // <<< 新增：註冊 AI 報告頁面路由
-        SettingsPage.route: (context) => const SettingsPage(),
-      },
-      debugShowCheckedModeBanner: false,
     );
   }
 }
