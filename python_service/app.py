@@ -4,6 +4,7 @@ from flask_cors import CORS
 from config import Config
 from models import db
 from routes_auth import bp as auth_bp
+from routes_stats import bp as stats_bp
 import base64, cv2, numpy as np, requests
 
 def create_app():
@@ -13,6 +14,7 @@ def create_app():
     CORS(app, supports_credentials=True)
     db.init_app(app)
     app.register_blueprint(auth_bp, url_prefix='/api')
+    app.register_blueprint(stats_bp, url_prefix='/api')
     # register image analysis route for flask run
     app = register_image_route(app)
     return app

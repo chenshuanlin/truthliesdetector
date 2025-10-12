@@ -255,44 +255,16 @@ class _AiReportPageState extends State<AiReportPage> {
                 ],
               ),
             )
-          : Column(
-              children: [
-                // Debug 資訊顯示
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  margin: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryGreen.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppColors.primaryGreen, width: 1),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('🔍 Debug 資訊', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.darkText)),
-                      const SizedBox(height: 8),
-                      Text('API Base URL: ${_apiService.baseUrl}', style: TextStyle(fontSize: 12, color: AppColors.darkText)),
-                      Text('數據來源: ${_statsData != null ? "API" : "預設"}', style: TextStyle(fontSize: 12, color: AppColors.darkText)),
-                      if (_statsData != null) 
-                        Text('載入時間: ${DateTime.now().toString().substring(0, 19)}', style: TextStyle(fontSize: 12, color: AppColors.darkText)),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 0.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildSegmentedControl(),
-                        const SizedBox(height: 20),
-                        _buildCurrentContent(),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
+          : SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 20.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildSegmentedControl(),
+                  const SizedBox(height: 20),
+                  _buildCurrentContent(),
+                ],
+              ),
             ),
     );
   }
