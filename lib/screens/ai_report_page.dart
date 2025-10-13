@@ -4,6 +4,21 @@ import 'package:truthliesdetector/themes/app_colors.dart';
 import 'package:truthliesdetector/services/api_service.dart';
 import 'dart:math';
 
+// 將後端 UTC ISO 時間字串 (e.g. 2025-10-13T11:02:04Z) 轉為本地時間並格式化顯示
+String formatUtcIsoToLocal(String iso) {
+  if (iso.isEmpty) return '';
+  DateTime? dt;
+  try {
+    dt = DateTime.parse(iso);
+  } catch (_) {
+    // 如果 parse 失敗，直接回傳原字串
+    return iso;
+  }
+  final local = dt.toLocal();
+  String two(int n) => n.toString().padLeft(2, '0');
+  return '${local.year}-${two(local.month)}-${two(local.day)} ${two(local.hour)}:${two(local.minute)}:${two(local.second)}';
+}
+
 // 顏色擴展方法 (用於計算顏色的深淺)
 extension ColorExtension on Color {
   Color darken([double amount = .1]) {
@@ -261,7 +276,9 @@ class _AiReportPageState extends State<AiReportPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildSegmentedControl(),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 8),
+                  if (_statsData != null) _buildMetaLine(),
+                  const SizedBox(height: 12),
                   _buildCurrentContent(),
                 ],
               ),
@@ -333,6 +350,34 @@ class _AiReportPageState extends State<AiReportPage> {
       default:
         return const Center(child: Text('報告加載中...'));
     }
+  }
+
+  // 一行小型動態來源標籤，證明資料為即時抓取
+  Widget _buildMetaLine() {
+    final meta = _statsData?['meta'] ?? _statsData?['Meta'] ?? _statsData?['metadata'] ?? (_statsData?['stats']?['meta']);
+    String fetchedAt = '';
+    int sourceCount = 0;
+    if (meta is Map) {
+      final fetched = meta['fetchedAt']?.toString() ?? '';
+      fetchedAt = formatUtcIsoToLocal(fetched);
+      final sc = meta['sourceCount'];
+      if (sc is int) sourceCount = sc; else if (sc is String) sourceCount = int.tryParse(sc) ?? 0;
+    }
+    return Row(
+      children: [
+        Icon(Icons.public, size: 16, color: AppColors.userGray),
+        const SizedBox(width: 6),
+        Flexible(
+          child: Text(
+            fetchedAt.isNotEmpty
+                ? '最新抓取時間 $fetchedAt · 來源樣本 $sourceCount 則'
+                : '正在載入最新資料來源…',
+            style: const TextStyle(fontSize: 12, color: AppColors.userGray),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
   }
 
   // MARK: Tab 0: 假訊息偵測 (包含 Bar Chart & Topics List)
@@ -412,6 +457,8 @@ class _AiReportPageState extends State<AiReportPage> {
   // MARK: Tab 1: 新聞趨勢分析
   Widget _buildTrendAnalysisContent() {
     final List<double> lineData = _reportData[1]?['chart_data'];
+    // 從統計資料取得熱門主題（動態）
+    final List<dynamic> topCategories = _statsData?['topCategories'] ?? [];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -435,11 +482,17 @@ class _AiReportPageState extends State<AiReportPage> {
         Wrap(
           spacing: 8.0,
           runSpacing: 8.0,
-          children: [
-            _buildPill('能源政策 (\u{1F525}+45%)', AppColors.dangerRed),
-            _buildPill('晶片供應', AppColors.primaryGreen),
-            _buildPill('國際貿易協定', AppColors.userGray),
-          ],
+          children: (topCategories.isNotEmpty
+                  ? topCategories.take(6)
+                  : const [])
+              .map((cat) {
+            final name = cat['name']?.toString() ?? '';
+            final percent = (cat['percentage'] is num) ? (cat['percentage'] as num).toInt() : 0;
+            final color = percent >= 30
+                ? AppColors.dangerRed
+                : (percent >= 15 ? AppColors.primaryGreen : AppColors.userGray);
+            return _buildPill('$name ($percent%)', color);
+          }).toList(),
         ),
         const SizedBox(height: 20),
       ],
@@ -449,6 +502,8 @@ class _AiReportPageState extends State<AiReportPage> {
   // MARK: Tab 2: 傳播模式分析
   Widget _buildPropagationModelContent() {
     final List<ChartData> pieData = _reportData[2]?['chart_data'];
+    // 從統計資料取得通道分佈（動態）
+    final List<dynamic> channels = _statsData?['propagationChannels'] ?? [];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -472,11 +527,20 @@ class _AiReportPageState extends State<AiReportPage> {
         Wrap(
           spacing: 8.0,
           runSpacing: 8.0,
-          children: [
-            _buildPill('KOL_金融達人 (高風險)', AppColors.dangerRed),
-            _buildPill('匿名論壇 (高擴散)', AppColors.dangerRed.darken(0.1)),
-            _buildPill('地方社群_A (中度)', AppColors.primaryGreen),
-          ],
+          children: (channels.isNotEmpty ? channels : const [])
+              .map<Widget>((c) {
+            final label = c['channel']?.toString() ?? '';
+            final pct = (c['percentage'] is num) ? (c['percentage'] as num).toInt() : 0;
+            Color color;
+            if (label.contains('社群')) {
+              color = AppColors.dangerRed;
+            } else if (label.contains('私人')) {
+              color = AppColors.primaryGreen;
+            } else {
+              color = AppColors.userGray;
+            }
+            return _buildPill('$label ($pct%)', color);
+          }).toList(),
         ),
         const SizedBox(height: 20),
       ],
@@ -524,36 +588,74 @@ class _AiReportPageState extends State<AiReportPage> {
 
   // 關鍵指標卡片
   Widget _buildMetricsCards() {
-    // 取用 API 數據
-    final stats = _statsData;
-    final totalVerified = stats?['totalVerified']?.toString() ?? '--';
-    final totalSuspicious = stats?['totalSuspicious']?.toString() ?? '--';
-    final aiAccuracy = stats?['aiAccuracy']?.toString() ?? '--';
-    // TODO: trend 數據如有需要可從 API 擴充
+    // 取用 API 數據（完全動態）
+    final stats = _statsData ?? {};
+    final weekly = (stats['weeklyReports'] as List<dynamic>? ?? []);
+
+    // 總數
+    int sumVerified = 0;
+    int sumSuspicious = 0;
+    for (final r in weekly) {
+      sumVerified += (r['verified'] as int? ?? 0);
+      sumSuspicious += (r['suspicious'] as int? ?? 0);
+    }
+
+    // 最近一天與前一天
+    int lastV = 0, prevV = 0, lastS = 0, prevS = 0;
+    if (weekly.isNotEmpty) {
+      final lr = weekly.last as Map<String, dynamic>;
+      lastV = (lr['verified'] as int? ?? 0);
+      lastS = (lr['suspicious'] as int? ?? 0);
+    }
+    if (weekly.length >= 2) {
+      final pr = weekly[weekly.length - 2] as Map<String, dynamic>;
+      prevV = (pr['verified'] as int? ?? 0);
+      prevS = (pr['suspicious'] as int? ?? 0);
+    }
+
+    int pctDelta(int now, int prev) {
+      if (prev <= 0) return 0;
+      return (((now - prev) / prev) * 100).round();
+    }
+
+    final verifiedDelta = pctDelta(lastV, prevV);
+    final suspiciousDelta = pctDelta(lastS, prevS);
+
+    // AI 準確率（從 API 或以最近一天估算）
+    int aiAcc = stats['aiAccuracy'] is int
+        ? stats['aiAccuracy'] as int
+        : ((lastV + lastS) > 0 ? ((lastV * 100) / (lastV + lastS)).round() : 0);
+
+    // AI 準確率趨勢（近一日 vs 前一日）
+    final prevAcc = (prevV + prevS) > 0 ? ((prevV * 100) / (prevV + prevS)) : aiAcc.toDouble();
+    final aiDelta = (aiAcc - prevAcc).round();
+
+    String fmtDelta(int d) => (d >= 0 ? '+$d% \u25B2' : '${d}% \u25BC');
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         // 已確認假訊息 (DangerRed)
         _MetricCard(
-          value: totalVerified,
+          value: sumVerified.toString(),
           label: '已確認假訊息',
-          trend: '+18% \u25B2', // 可改為動態
+          trend: fmtDelta(verifiedDelta),
           color: AppColors.dangerRed,
         ),
         const SizedBox(width: 10),
         // 待查證訊息 (UserGray - 偏中性)
         _MetricCard(
-          value: totalSuspicious,
+          value: sumSuspicious.toString(),
           label: '待查證訊息',
-          trend: '+5% \u25B2', // 可改為動態
+          trend: fmtDelta(suspiciousDelta),
           color: AppColors.userGray,
         ),
         const SizedBox(width: 10),
         // AI 辨識率 (PrimaryGreen2)
         _MetricCard(
-          value: aiAccuracy != '--' ? '$aiAccuracy%' : '--',
+          value: '$aiAcc%',
           label: 'AI 辨識率',
-          trend: '+12% \u25B2', // 可改為動態
+          trend: fmtDelta(aiDelta),
           color: AppColors.primaryGreen2,
         ),
       ],
@@ -616,7 +718,7 @@ class _AiReportPageState extends State<AiReportPage> {
       MaterialPageRoute(
         builder: (context) => FullReportModal(
           initialTabIndex: _selectedTabIndex,
-          reportData: _reportData,
+          reportData: null, // 改為由後端動態取得完整報告
         ),
         fullscreenDialog: true,
       ),
@@ -1047,12 +1149,12 @@ class _LineChartPainter extends CustomPainter {
 /// 模擬完整報告 Modal (包含 3 個 Tab)
 class FullReportModal extends StatefulWidget {
   final int initialTabIndex;
-  final Map<int, Map<String, dynamic>> reportData;
+  final Map<int, Map<String, dynamic>>? reportData; // 可為 null，為 null 則改為呼叫後端取得
 
   const FullReportModal({
     super.key,
     required this.initialTabIndex,
-    required this.reportData,
+    this.reportData,
   });
 
   @override
@@ -1061,11 +1163,89 @@ class FullReportModal extends StatefulWidget {
 
 class _FullReportModalState extends State<FullReportModal> with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  Map<int, Map<String, dynamic>>? _report; // 動態/本地都映射到相同結構
+  bool _loading = true;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this, initialIndex: widget.initialTabIndex);
+    _initReport();
+  }
+
+  Future<void> _initReport() async {
+    if (widget.reportData != null) {
+      setState(() {
+        _report = widget.reportData;
+        _loading = false;
+      });
+      return;
+    }
+
+    // 從後端取得完整報告
+    final api = ApiService.getInstance();
+    final report = await api.getFullReport();
+    if (report == null) {
+      setState(() {
+        _loading = false; // 顯示空白/錯誤狀態
+      });
+      return;
+    }
+
+    // 將後端格式映射為舊有 UI 可直接使用的資料結構
+    List<dynamic> tabs = report['tabs'] as List<dynamic>? ?? [];
+    Map<int, Map<String, dynamic>> mapped = {};
+
+    for (int i = 0; i < tabs.length && i < 3; i++) {
+      final t = tabs[i] as Map<String, dynamic>;
+      final key = i; // 對應 0/1/2 三個分頁
+      final chartType = (t['chartType'] ?? '').toString();
+      final meta = (t['meta'] as Map<String, dynamic>?) ?? const {};
+
+      dynamic chartData;
+      if (chartType == 'bar') {
+        final weekly = (t['weeklyReports'] as List<dynamic>? ?? []);
+        chartData = weekly.map((r) {
+          final day = r['day']?.toString() ?? '';
+          final suspicious = (r['suspicious'] is num) ? (r['suspicious'] as num).toDouble() : 0.0;
+          final isHigh = suspicious > 20;
+          return BarData(suspicious, isHigh, day);
+        }).toList();
+      } else if (chartType == 'line') {
+        final line = (t['line'] as List<dynamic>? ?? []);
+        chartData = line.map((e) => (e is num) ? e.toDouble() : 0.0).toList();
+      } else if (chartType == 'pie') {
+        final channels = (t['channels'] as List<dynamic>? ?? []);
+        chartData = channels.map<ChartData>((c) {
+          final label = c['channel']?.toString() ?? '';
+          final percent = (c['percentage'] is num) ? (c['percentage'] as num).toDouble() : 0.0;
+          Color color;
+          if (label.contains('社群')) {
+            color = AppColors.dangerRed;
+          } else if (label.contains('私人')) {
+            color = AppColors.primaryGreen;
+          } else {
+            color = AppColors.userGray;
+          }
+          return ChartData(label, percent, color);
+        }).toList();
+      } else {
+        chartData = const [];
+      }
+
+      mapped[key] = {
+        'title': t['title']?.toString() ?? '',
+        'content': t['content']?.toString() ?? '',
+        'chart_type': chartType,
+        'chart_data': chartData,
+        'meta': meta,
+      };
+    }
+
+    setState(() {
+      _report = mapped;
+      _loading = false;
+    });
   }
 
   @override
@@ -1098,18 +1278,21 @@ class _FullReportModalState extends State<FullReportModal> with SingleTickerProv
           tabs: tabTitles.map((title) => Tab(text: title)).toList(),
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: widget.reportData.entries.map((entry) {
-          final data = entry.value;
-          return _buildReportTabView(
-            title: data['title'],
-            content: data['content'],
-            chartData: data['chart_data'],
-            chartType: data['chart_type'],
-          );
-        }).toList(),
-      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator(color: AppColors.primaryGreen))
+          : TabBarView(
+              controller: _tabController,
+              children: (_report ?? {}).entries.map((entry) {
+                final data = entry.value;
+                return _buildReportTabView(
+                  title: data['title'],
+                  content: data['content'],
+                  chartData: data['chart_data'],
+                  chartType: data['chart_type'],
+                  meta: (data['meta'] as Map<String, dynamic>?),
+                );
+              }).toList(),
+            ),
     );
   }
 
@@ -1118,6 +1301,7 @@ class _FullReportModalState extends State<FullReportModal> with SingleTickerProv
     required String content,
     required dynamic chartData,
     required String chartType,
+    Map<String, dynamic>? meta,
   }) {
     // 根據 chartType 選擇對應的圖表 Widget
     Widget chartWidget;
@@ -1140,9 +1324,19 @@ class _FullReportModalState extends State<FullReportModal> with SingleTickerProv
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            '--- 報告生成於 ${DateTime.now().year}/${DateTime.now().month.toString().padLeft(2, '0')}/${DateTime.now().day.toString().padLeft(2, '0')} (API 數據) ---',
-            style: const TextStyle(color: AppColors.userGray, fontSize: 12),
+          Builder(
+            builder: (_) {
+              String ts = '';
+              if (meta != null && meta.isNotEmpty) {
+                final fetched = meta['fetchedAt']?.toString() ?? '';
+                ts = formatUtcIsoToLocal(fetched);
+              }
+              final label = ts.isNotEmpty ? ts : '載入中…';
+              return Text(
+                '--- 報告生成於 $label (API 數據) ---',
+                style: const TextStyle(color: AppColors.userGray, fontSize: 12),
+              );
+            },
           ),
           const SizedBox(height: 10),
           Text(

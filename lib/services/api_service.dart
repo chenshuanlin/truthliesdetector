@@ -94,6 +94,20 @@ class ApiService {
     }
   }
 
+  Future<Map<String, dynamic>?> getFullReport() async {
+    final url = Uri.parse('$baseUrl/api/full-report');
+    try {
+      final resp = await http.get(url);
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        return data['report'] as Map<String, dynamic>;
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
   Future<Map<String, dynamic>?> analyzeImage({String? imageUrl, String? imageBase64}) async {
     final url = Uri.parse('$baseUrl/api/image-check');
     try {
