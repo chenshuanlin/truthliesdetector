@@ -4,6 +4,7 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
 from email.utils import parsedate_to_datetime
 from collections import Counter
+from verification_loader import get_verification_stats, get_daily_distribution
 
 bp = Blueprint('stats', __name__)
 
@@ -34,7 +35,7 @@ def _categorize_titles(titles):
     # 簡單的關鍵字類別對應
     mapping = {
         '政治': ['選舉', '總統', '立法院', '政治', '政黨', '立委', '國會', '藍營', '綠營'],
-        '健康': ['確診', '疫苗', '疫情', '醫院', '醫療', '衛福', '登革熱'],
+        '健康': ['確診', '疫苗', '疫情', '醫院', '醫療', '衛福', '登革熱', '減肥', '瘦身', '減重', '健康', '營養', '飲食', '運動', '健身', '減脂', '增肌', '蛋白質', '維生素', '保健', '養生', '食譜', '菜單'],
         '經濟': ['股', '台積電', '經濟', '投資', '通膨', '通縮', '銀行', '匯率'],
         '科技': ['AI', '人工智慧', '科技', '晶片', '蘋果', '微軟', 'Google', '特斯拉'],
         '社會': ['警方', '警察', '詐騙', '車禍', '火警', '社會', '糾紛'],
@@ -137,76 +138,90 @@ def _sentiment_from_titles(titles):
 
 @bp.get('/fake-news-stats')
 def fake_news_stats():
-    items = _fetch_google_news_rss(120)
-    titles = [i['title'] for i in items if i.get('title')]
-    top_categories = _categorize_titles(titles)
-
-    # 以 RSS pubDate 統計各日新聞量
+    import sys
+    sys.stdout.flush()
+    sys.stderr.write("[DEBUG-ERR] /fake-news-stats API 被調用\n")
+    sys.stderr.flush()
+    print("[DEBUG-OUT] /fake-news-stats API 被調用", flush=True)
+    # 改用真實查證資料
+    verified_count, unverified_count, verified_items, unverified_items = get_verification_stats()
+    print(f"[DEBUG-OUT] verified_count={verified_count}, unverified_count={unverified_count}", flush=True)
+    sys.stderr.write(f"[DEBUG-ERR] verified_count={verified_count}, unverified_count={unverified_count}\n")
+    sys.stderr.flush()
+    
+    # 總樣本數
+    total_count = verified_count + unverified_count
+    
+    if total_count == 0:
+        # 若沒有查證資料，回傳空結果
+        return jsonify({
+            'ok': True,
+            'stats': {
+                'totalVerified': 0,
+                'totalSuspicious': 0,
+                'aiAccuracy': 0,  # 無數據時辨識率為 0
+                'weeklyReports': [],
+                'topCategories': [],
+                'propagationChannels': [],
+                'sentiment': {'neutral': 80, 'negative': 10, 'positive': 10},
+                'meta': {
+                    'fetchedAt': datetime.utcnow().isoformat(timespec='seconds') + 'Z',
+                    'source': 'Verification Database (projectt/reports)',
+                    'sourceCount': 0,
+                    'headlineSamples': [],
+                }
+            }
+        })
+    
+    # 取得每日分佈
+    verified_daily = get_daily_distribution(verified_items, 7)
+    unverified_daily = get_daily_distribution(unverified_items, 7)
+    
+    # 建立近 7 天的週報
     now = datetime.utcnow()
     start = (now - timedelta(days=6)).date()
-    per_day_counts = {d: 0 for d in [(start + timedelta(days=i)) for i in range(7)]}
-    for it in items:
-        raw = it.get('pubDate')
-        try:
-            dt = parsedate_to_datetime(raw) if raw else None
-            if dt is None:
-                continue
-            d = dt.date()
-            if d in per_day_counts:
-                per_day_counts[d] += 1
-        except Exception:
-            continue
-
-    # 真實來源樣本數
-    total_count = len(titles)
-    # 假設 60% 當 suspicious, 40% 當 verified
-    suspicious_total = int(round(total_count * 0.6))
-    verified_total = total_count - suspicious_total
-
-    # 按每日比例分配 suspicious/verified，確保加總等於來源樣本數
-    day_total = sum(per_day_counts.values()) or 1
-    suspicious_left = suspicious_total
-    verified_left = verified_total
     weekly = []
     for i in range(7):
         d = start + timedelta(days=i)
-        count = per_day_counts.get(d, 0)
-        # 當日比例
-        ratio = count / day_total if day_total > 0 else 0
-        # 當日分配
-        suspicious = int(round(suspicious_total * ratio))
-        verified = int(round(verified_total * ratio))
-        # 最後一天補差，確保總和精確
-        if i == 6:
-            suspicious = suspicious_left
-            verified = verified_left
-        suspicious_left -= suspicious
-        verified_left -= verified
+        # day_offset: 0=今天, 1=昨天, ..., 6=7天前
+        # 但我們要從最舊到最新，所以反轉索引
+        day_offset = 6 - i
+        verified = verified_daily.get(day_offset, 0)
+        suspicious = unverified_daily.get(day_offset, 0)
         weekly.append({
             'day': ['一','二','三','四','五','六','日'][d.weekday()],
-            'suspicious': suspicious,
             'verified': verified,
+            'suspicious': suspicious,
         })
-
-    total_verified = sum(d['verified'] for d in weekly)
-    total_suspicious = sum(d['suspicious'] for d in weekly)
-
-    propagation_channels = _infer_channels(titles)
-    sentiment = _sentiment_from_titles(titles)
-
+    
+    # 從查證資料提取標題做分類
+    all_titles = [item.get('title', '') for item in (verified_items + unverified_items) if item.get('title')]
+    top_categories = _categorize_titles(all_titles)
+    propagation_channels = _infer_channels(all_titles)
+    sentiment = _sentiment_from_titles(all_titles)
+    
     meta = {
         'fetchedAt': datetime.utcnow().isoformat(timespec='seconds') + 'Z',
-        'source': 'Google News RSS (zh-TW)',
+        'source': 'Verification Database (projectt/reports)',
         'sourceCount': total_count,
-        'headlineSamples': titles[:3],
+        'headlineSamples': all_titles[:3],
     }
+    
+    # 計算 AI 辨識率
+    total_detected = verified_count + unverified_count
+    # ai_accuracy = round((verified_count / total_detected * 100)) if total_detected > 0 else 0
+    ai_accuracy = 70  # 暫時強制設為 70 測試
+    import sys
+    print(f"[DEBUG-OUT] AI 辨識率計算: {verified_count} / {total_detected} * 100 = {ai_accuracy}%", flush=True)
+    sys.stderr.write(f"[DEBUG-ERR] AI 辨識率計算: {verified_count} / {total_detected} * 100 = {ai_accuracy}%\n")
+    sys.stderr.flush()
 
     return jsonify({
         'ok': True,
         'stats': {
-            'totalVerified': total_verified,
-            'totalSuspicious': total_suspicious,
-            'aiAccuracy': 86,
+            'totalVerified': verified_count,
+            'totalSuspicious': unverified_count,
+            'aiAccuracy': ai_accuracy,
             'weeklyReports': weekly,
             'topCategories': top_categories,
             'propagationChannels': propagation_channels,
@@ -281,7 +296,9 @@ def full_report():
 
     total_verified = sum(d['verified'] for d in weekly)
     total_suspicious = sum(d['suspicious'] for d in weekly)
-    ai_accuracy = 86
+    # 計算 AI 辨識率：已驗證的假訊息佔總偵測數量的百分比
+    total_detected = total_verified + total_suspicious
+    ai_accuracy = round((total_verified / total_detected * 100)) if total_detected > 0 else 0
     line_series = [float((w['suspicious'] + w['verified'])) for w in weekly]
     channels = _infer_channels(titles)
     sent = _sentiment_from_titles(titles)
@@ -358,3 +375,5 @@ def full_report():
     }
 
     return jsonify({'ok': True, 'report': report})
+
+

@@ -15,6 +15,18 @@ def create_app():
     db.init_app(app)
     app.register_blueprint(auth_bp, url_prefix='/api')
     app.register_blueprint(stats_bp, url_prefix='/api')
+    
+    # 啟用每日自動爬蟲
+    # 暫時禁用定時爬蟲以穩定測試環境
+    # try:
+    #     from daily_crawler import start_daily_crawler_thread
+    #     start_daily_crawler_thread()
+    #     print('[定時爬蟲] ✅ 已啟動每日自動爬蟲執行緒')
+    # except Exception as e:
+    #     print(f'[定時爬蟲] ❌ 啟動失敗: {e}')
+    #     import traceback
+    #     traceback.print_exc()
+    
     # register image analysis route for flask run
     app = register_image_route(app)
     return app
@@ -91,7 +103,6 @@ def register_image_route(app):
 
 if __name__ == '__main__':
     app = create_app()
-    app = register_image_route(app)
     with app.app_context():
         db.create_all()
     app.run(host='0.0.0.0', port=5000, debug=True)
