@@ -22,8 +22,7 @@ try:
 except Exception:
     GoogleSearch = None
 try:
-    from google import genai
-    from google.genai import types
+    import google.generativeai as genai
 except Exception:
     genai = None
     types = None
@@ -45,7 +44,7 @@ EMOTIONAL_INDICATORS = [
 SERPAPI_API_KEY = "d74cf3f39503404c0426005f0c23cc59246f60084b198b8dcbee955b04448452"
 
 # ⚠️ Gemini API 金鑰 (用於 LLM 深度分析，請務必替換！)
-GEMINI_API_KEY = "AIzaSyCT2yOK8ELSJWQ6X3IW3pQww0MqzLmGHTY"
+GEMINI_API_KEY = "AIzaSyBZoPr5y8AM3c9VcM5ahIAqfw0ODtRAtQk"
 
 # ==============================================================================
 # II. 內容擷取與預處理模組 (Extraction & Preprocessing) (略，與上一版相同)
@@ -212,8 +211,14 @@ class CredibilityAnalyzerClient:
             print("❌ LLM 客戶端：Gemini API 金鑰未設置。將進入【模擬模式】。")
         else:
             try:
-                self.client = genai.Client(api_key=api_key)
-                print("✅ LLM 客戶端：Gemini API 初始化成功。")
+                # 使用新版 Gemini API 初始化方式
+                if genai is not None:
+                    genai.configure(api_key=api_key)
+                    self.client = genai
+                    print("[OK] LLM 客戶端：Gemini API 初始化成功。")
+                else:
+                    self.client = None
+                    print("❌ LLM 客戶端：google-generativeai 模組未安裝。將進入【模擬模式】。")
             except Exception as e:
                  self.client = None
                  print(f"❌ LLM 客戶端：Gemini API 初始化失敗 ({e})。將進入【模擬模式】。")
@@ -246,24 +251,24 @@ class CredibilityAnalyzerClient:
             3. summary: 基於內容和特徵的專業分析總結（約100字）。
             """
             
-            config = types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_schema={
-                    "type": "object",
-                    "properties": {
-                        "credibility_level": {"type": "string"},
-                        "confidence_score": {"type": "number"},
-                        "summary": {"type": "string"},
+            # 使用新版 Gemini API
+            model = self.client.GenerativeModel(
+                'gemini-2.0-flash',
+                generation_config={
+                    "response_mime_type": "application/json",
+                    "response_schema": {
+                        "type": "object",
+                        "properties": {
+                            "credibility_level": {"type": "string"},
+                            "confidence_score": {"type": "number"},
+                            "summary": {"type": "string"},
+                        },
+                        "required": ["credibility_level", "confidence_score", "summary"],
                     },
-                    "required": ["credibility_level", "confidence_score", "summary"],
-                },
+                }
             )
             
-            response = self.client.models.generate_content(
-                model='gemini-2.5-flash',
-                contents=[prompt],
-                config=config,
-            )
+            response = model.generate_content(prompt)
             
             data = json.loads(response.text)
             
@@ -354,30 +359,30 @@ class CredibilityAnalyzerClient:
                 + "JSON 必須只有一個物件，範例如：{\"source_entity_score\":0.8, \"domain_score\":0.9, \"title_body_consistency\":0.8, \"evidence_quality\":0.7, \"ad_promo_intensity\":0.1, \"hyperbole_score\":0.2, \"emotive_clickbait_density\":0.1, \"title_body_embedding_cosine\":0.85, \"short_judgement\":\"高度可信\"}\n"
             )
 
-            config = types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_schema={
-                    "type": "object",
-                    "properties": {
-                        "source_entity_score": {"type": "number"},
-                        "domain_score": {"type": "number"},
-                        "title_body_consistency": {"type": "number"},
-                        "evidence_quality": {"type": "number"},
-                        "ad_promo_intensity": {"type": "number"},
-                        "hyperbole_score": {"type": "number"},
-                        "emotive_clickbait_density": {"type": "number"},
-                        "title_body_embedding_cosine": {"type": "number"},
-                        "short_judgement": {"type": "string"},
-                    },
-                    "required": ["source_entity_score","domain_score","title_body_consistency","evidence_quality","ad_promo_intensity","hyperbole_score","emotive_clickbait_density","title_body_embedding_cosine","short_judgement"]
+            # 使用新版 Gemini API
+            model = self.client.GenerativeModel(
+                'gemini-2.0-flash',
+                generation_config={
+                    "response_mime_type": "application/json",
+                    "response_schema": {
+                        "type": "object",
+                        "properties": {
+                            "source_entity_score": {"type": "number"},
+                            "domain_score": {"type": "number"},
+                            "title_body_consistency": {"type": "number"},
+                            "evidence_quality": {"type": "number"},
+                            "ad_promo_intensity": {"type": "number"},
+                            "hyperbole_score": {"type": "number"},
+                            "emotive_clickbait_density": {"type": "number"},
+                            "title_body_embedding_cosine": {"type": "number"},
+                            "short_judgement": {"type": "string"},
+                        },
+                        "required": ["source_entity_score","domain_score","title_body_consistency","evidence_quality","ad_promo_intensity","hyperbole_score","emotive_clickbait_density","title_body_embedding_cosine","short_judgement"]
+                    }
                 }
             )
 
-            response = self.client.models.generate_content(
-                model='gemini-2.5-flash',
-                contents=[prompt],
-                config=config,
-            )
+            response = model.generate_content(prompt)
             data = json.loads(response.text)
             # normalize numbers into 0.0-1.0 range
             features = {k: float(data.get(k, 0.0)) for k in [
@@ -387,8 +392,19 @@ class CredibilityAnalyzerClient:
             return features, short
         except Exception as e:
             logging.debug(f"Gemini annotate failed: {e}")
-            # fallback to simulation
-            return self.annotate_features(title, content, url)
+            # fallback to heuristic simulation
+            features = {
+                "source_entity_score": 0.5,
+                "domain_score": 0.5,
+                "title_body_consistency": 0.6,
+                "evidence_quality": 0.5,
+                "ad_promo_intensity": 0.3,
+                "hyperbole_score": 0.4,
+                "emotive_clickbait_density": 0.3,
+                "title_body_embedding_cosine": 0.7
+            }
+            short = "模擬判斷"
+            return features, short
 
 # ==============================================================================
 # VI. 報告生成模組 (Report Generation Module)
@@ -518,9 +534,9 @@ def run_analysis_system():
     if model_path.exists():
         try:
             booster = lgb.Booster(model_file=str(model_path))
-            print(f"✅ 已載入模型: {model_path}")
+            print(f"[OK] 已載入模型: {model_path}")
         except Exception as e:
-            print(f"❌ 載入模型失敗: {e}")
+            print(f"[ERROR] 載入模型失敗: {e}")
             booster = None
 
     if args.query:
@@ -575,7 +591,7 @@ def run_analysis_system():
         output_content = json.dumps({'mode': 'URL', 'items': enriched}, ensure_ascii=False, indent=2)
 
         output_content = json.dumps({'mode': 'URL', 'items': output_items}, ensure_ascii=False, indent=2)
-        print("\n✅ 單一網址擷取完成，輸出 JSON：\n")
+        print("\n[OK] 單一網址擷取完成，輸出 JSON：\n")
         print(output_content)
         # 存檔改為執行結束時統一寫入（見程式尾端）
 
@@ -605,12 +621,17 @@ def run_analysis_system():
                     skipped.append((url, f'content too short ({len(content) if content else 0})'))
                     continue
 
+                # 加入爬取時間戳記
+                from datetime import datetime
+                crawled_at = datetime.now().isoformat()
+
                 entry = {
                     'index': i,
                     'title': title,
                     'url': url,
                     'domain': domain,
                     'content': content,
+                    'crawled_at': crawled_at,  # 新增：記錄爬取時間
                 }
 
                 # annotate with Gemini or heuristic and predict with model
@@ -633,10 +654,10 @@ def run_analysis_system():
 
                 items.append(entry)
 
-                print(f"  > ✅ [{i}] {domain} 擷取完成。")
+                print(f"  > [OK] [{i}] {domain} 擷取完成。")
 
             output_content = json.dumps({'mode': 'KEYWORD', 'items': items, 'skipped_count': len(skipped)}, ensure_ascii=False, indent=2)
-            print(f"\n✅ 批量擷取完成！共擷取: {len(items)} 篇；被跳過: {len(skipped)} 篇。")
+            print(f"\n[OK] 批量擷取完成！共擷取: {len(items)} 篇；被跳過: {len(skipped)} 篇。")
             if skipped:
                 print("\n-- 被跳過的連結 (範例最多 10 筆) --")
                 for u, reason in skipped[:10]:

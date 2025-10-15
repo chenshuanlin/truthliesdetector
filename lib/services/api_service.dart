@@ -9,8 +9,22 @@ class ApiService {
   ApiService._internal(this.baseUrl);
 
   static ApiService getInstance({String? baseUrl}) {
-    _instance ??= ApiService._internal(baseUrl ?? const String.fromEnvironment('API_BASE_URL', defaultValue: 'http://localhost:8080'));
+    _instance ??= ApiService._internal(baseUrl ?? const String.fromEnvironment('API_BASE_URL', defaultValue: 'http://localhost:5000'));
     return _instance!;
+  }
+
+  Future<Map<String, dynamic>?> getFakeNewsStats() async {
+    final url = Uri.parse('$baseUrl/api/fake-news-stats');
+    try {
+      final resp = await http.get(url);
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        return data;
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
   }
 
   Future<User?> login(String account, String password) async {
@@ -56,41 +70,27 @@ class ApiService {
 
   Future<bool> updateUser(User user) async {
     final url = Uri.parse('$baseUrl/api/users/${user.userId}');
-    final resp = await http.put(url, headers: {'Content-Type': 'application/json'}, body: jsonEncode({
-      'username': user.username,
-      'email': user.email,
-      'phone': user.phone,
-    }));
-    return resp.statusCode == 200;
-  }
-
-  Future<Map<String, dynamic>?> analyzeNews(String newsUrl) async {
-    final url = Uri.parse('$baseUrl/api/analyze-news');
-    final resp = await http.post(url, headers: {'Content-Type': 'application/json'}, body: jsonEncode({
-      'url': newsUrl,
-    }));
-    if (resp.statusCode == 200) {
-      final data = jsonDecode(resp.body);
-      return data['analysis'];
-    }
-    return null;
-  }
-
-  Future<Map<String, dynamic>?> getFakeNewsStats() async {
-    final url = Uri.parse('$baseUrl/api/fake-news-stats');
-    print('正在請求: $url');
     try {
-      final resp = await http.get(url);
+      final resp = await http.put(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'username': user.username,
+          'email': user.email,
+          'phone': user.phone,
+        }),
+      );
       print('API 回應狀態碼: ${resp.statusCode}');
       print('API 回應內容: ${resp.body}');
       if (resp.statusCode == 200) {
         final data = jsonDecode(resp.body);
-        return data['stats'];
+        // 根據實際 API 回傳內容調整
+        return data['success'] == true || data['stats'] == true;
       }
-      return null;
+      return false;
     } catch (e) {
       print('API 請求錯誤: $e');
-      return null;
+      return false;
     }
   }
 
@@ -122,6 +122,28 @@ class ApiService {
       return null;
     } catch (e) {
       print('analyzeImage error: $e');
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>?> triggerScraper({String query = '減肥'}) async {
+    final url = Uri.parse('$baseUrl/api/trigger-scraper');
+    print('觸發爬蟲: $url, 查詢關鍵字: $query');
+    try {
+      final resp = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'query': query}),
+      );
+      print('爬蟲觸發回應狀態碼: ${resp.statusCode}');
+      print('爬蟲觸發回應內容: ${resp.body}');
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body);
+        return data;
+      }
+      return null;
+    } catch (e) {
+      print('觸發爬蟲錯誤: $e');
       return null;
     }
   }

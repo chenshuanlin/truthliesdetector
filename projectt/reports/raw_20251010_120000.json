@@ -1,0 +1,25 @@
+{
+  "mode": "KEYWORD",
+  "items": [
+    {
+      "index": 1,
+      "title": "投資詐騙廣告猖獗，金管會提醒勿輕信高報酬保證",
+      "short_judgement": "經查證，該訊息為假訊息。",
+      "ann_features": {
+        "evidence_quality": 0.92,
+        "source_entity_score": 0.93
+      },
+      "crawled_at": "2025-10-10T12:00:00"
+    },
+    {
+      "index": 2,
+      "title": "教育部澄清：網傳新課綱內容為假消息",
+      "short_judgement": "已查證，網傳內容不實。",
+      "ann_features": {
+        "evidence_quality": 0.91,
+        "source_entity_score": 0.91
+      },
+      "crawled_at": "2025-10-10T12:00:00"
+    }
+  ]
+}

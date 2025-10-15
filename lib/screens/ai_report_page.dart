@@ -40,13 +40,16 @@ class ChartData {
   ChartData(this.label, this.value, this.color);
 }
 
-/// 柱狀圖數據模型
+/// 柱狀圖數據模型（堆疊式：已查證 + 待查證）
 class BarData {
-  final double value;
-  final bool isHighRisk; // 是否為高風險 (紅色)
+  final double verified; // 已查證數量（綠色）
+  final double suspicious; // 待查證數量（紅色）
   final String label; // 星期幾或月份標籤
 
-  BarData(this.value, this.isHighRisk, this.label);
+  BarData(this.verified, this.suspicious, this.label);
+  
+  // 總數
+  double get total => verified + suspicious;
 }
 
 // MARK: - 主頁面
@@ -61,7 +64,6 @@ class AiReportPage extends StatefulWidget {
 }
 
 class _AiReportPageState extends State<AiReportPage> {
-  int _selectedTabIndex = 0;
   final ApiService _apiService = ApiService.getInstance();
   Map<String, dynamic>? _statsData;
   bool _isLoading = true;
@@ -76,18 +78,14 @@ class _AiReportPageState extends State<AiReportPage> {
     setState(() {
       _isLoading = true;
     });
-    
     try {
-      print('開始載入統計數據...');
-      final stats = await _apiService.getFakeNewsStats();
-      print('API 回傳數據: $stats');
+      final response = await _apiService.getFakeNewsStats();
       setState(() {
-        _statsData = stats;
+        // API 回傳格式是 {"ok": true, "stats": {...}}，只取 stats 部分
+        _statsData = response?['stats'] as Map<String, dynamic>?;
         _isLoading = false;
       });
-      print('數據載入完成');
     } catch (e) {
-      print('Error loading stats: $e');
       setState(() {
         _isLoading = false;
       });
@@ -104,7 +102,9 @@ class _AiReportPageState extends State<AiReportPage> {
     final weeklyReports = stats['weeklyReports'] as List<dynamic>? ?? [];
     final totalVerified = stats['totalVerified'] as int? ?? 32;
     final totalSuspicious = stats['totalSuspicious'] as int? ?? 125;
-    final aiAccuracy = stats['aiAccuracy'] as int? ?? 86;
+    // 直接從 totalVerified 和 totalSuspicious 計算 AI 辨識率
+    final total = totalVerified + totalSuspicious;
+    final aiAccuracy = total > 0 ? ((totalVerified / total * 100).round()) : 0;
   final topCategories = stats['topCategories'] as List<dynamic>? ?? [];
   final propagationChannels = stats['propagationChannels'] as List<dynamic>? ?? [];
 
@@ -176,17 +176,17 @@ class _AiReportPageState extends State<AiReportPage> {
   List<BarData> _buildWeeklyChartData(List<dynamic> weeklyReports) {
     if (weeklyReports.isEmpty) {
       return [
-        BarData(50, false, '一'), BarData(75, true, '二'), BarData(60, false, '三'),
-        BarData(85, true, '四'), BarData(70, true, '五'), BarData(55, false, '六'),
-        BarData(45, true, '日'),
+        BarData(2, 3, '一'), BarData(3, 4, '二'), BarData(2, 2, '三'),
+        BarData(3, 5, '四'), BarData(2, 3, '五'), BarData(2, 2, '六'),
+        BarData(1, 2, '日'),
       ];
     }
 
     return weeklyReports.map((report) {
       final day = report['day'] as String? ?? '';
+      final verified = (report['verified'] as int? ?? 0).toDouble();
       final suspicious = (report['suspicious'] as int? ?? 0).toDouble();
-      final isHighRisk = suspicious > 20;
-      return BarData(suspicious, isHighRisk, day);
+      return BarData(verified, suspicious, day);
     }).toList();
   }
 
@@ -208,9 +208,9 @@ class _AiReportPageState extends State<AiReportPage> {
         'title': '假訊息監測完整報告 (週報)',
         'content': '本週共偵測到 **157** 條疑似假訊息，其中 **32 條**經 AI 交叉比對後確認為假消息，相較上週增長 **18%**。主要增長點集中在政治和健康類別。\n\n**熱門趨勢分析:**\n* 健康與疫苗 (38%): 主要散佈在私人訊息群組，內容涉及未經證實的療法。\n* 選舉與政治 (29%): 多數源於社群媒體，與特定候選人或政策相關。\n* 經濟相關 (18%): 主要為投資誘餌和市場謠言。\n\n**建議:** 立即對高傳播風險的「健康類假訊息」進行人工複核和澄清。',
         'chart_data': [
-          BarData(50, false, '一'), BarData(75, true, '二'), BarData(60, false, '三'),
-          BarData(85, true, '四'), BarData(70, true, '五'), BarData(55, false, '六'),
-          BarData(45, true, '日'),
+          BarData(2, 3, '一'), BarData(3, 4, '二'), BarData(2, 2, '三'),
+          BarData(3, 5, '四'), BarData(2, 3, '五'), BarData(2, 2, '六'),
+          BarData(1, 2, '日'),
         ],
         'chart_type': 'bar',
       },
@@ -252,12 +252,7 @@ class _AiReportPageState extends State<AiReportPage> {
           icon: const Icon(Icons.arrow_back_ios_new, color: AppColors.darkText),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh, color: AppColors.darkText),
-            onPressed: _loadStatsData,
-          ),
-        ],
+        actions: [],
       ),
       body: _isLoading
           ? const Center(
@@ -275,6 +270,19 @@ class _AiReportPageState extends State<AiReportPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // 新增：每日自動更新說明
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.yellow[100],
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Text(
+                      '資料每日自動更新，無需手動刷新',
+                      style: TextStyle(color: Colors.brown, fontSize: 14),
+                    ),
+                  ),
                   _buildSegmentedControl(),
                   const SizedBox(height: 8),
                   if (_statsData != null) _buildMetaLine(),
@@ -288,29 +296,10 @@ class _AiReportPageState extends State<AiReportPage> {
 
   // MARK: - Widget Builders
 
-  // 頂部分段控制（Tab Bar）
+  // 頂部分段控制（Tab Bar） - 只保留假訊息偵測
   Widget _buildSegmentedControl() {
-    final List<String> titles = ['假訊息偵測', '新聞趨勢', '傳播模式'];
-
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.start,
-      children: titles.asMap().entries.map((entry) {
-        int index = entry.key;
-        String title = entry.value;
-        return Padding(
-          padding: const EdgeInsets.only(right: 8.0),
-          child: _buildTabItem(
-            title,
-            isSelected: _selectedTabIndex == index,
-            onTap: () {
-              setState(() {
-                _selectedTabIndex = index;
-              });
-            },
-          ),
-        );
-      }).toList(),
-    );
+    // 移除新聞趨勢和傳播模式分頁，只保留假訊息偵測
+    return const SizedBox.shrink(); // 只有一個分頁時不需要顯示切換按鈕
   }
 
   // 單個 Tab 項目
@@ -338,18 +327,9 @@ class _AiReportPageState extends State<AiReportPage> {
     );
   }
 
-  // 根據選中的 Tab 返回對應的內容
+  // 根據選中的 Tab 返回對應的內容 - 只保留假訊息偵測
   Widget _buildCurrentContent() {
-    switch (_selectedTabIndex) {
-      case 0:
-        return _buildDetectionReportContent();
-      case 1:
-        return _buildTrendAnalysisContent();
-      case 2:
-        return _buildPropagationModelContent();
-      default:
-        return const Center(child: Text('報告加載中...'));
-    }
+    return _buildDetectionReportContent();
   }
 
   // 一行小型動態來源標籤，證明資料為即時抓取
@@ -454,134 +434,17 @@ class _AiReportPageState extends State<AiReportPage> {
     );
   }
 
-  // MARK: Tab 1: 新聞趨勢分析
-  Widget _buildTrendAnalysisContent() {
-    final List<double> lineData = _reportData[1]?['chart_data'];
-    // 從統計資料取得熱門主題（動態）
-    final List<dynamic> topCategories = _statsData?['topCategories'] ?? [];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // 趨勢圖卡片
-        _buildVisualCard(
-          title: '新聞熱度趨勢圖 (日)',
-          onViewAll: () => _showFullReportModal(),
-          child: AiLineChart(data: lineData, color: AppColors.primaryGreen2),
-        ),
-        const SizedBox(height: 20),
-
-        // 關鍵詞藥丸
-        const Padding(
-          padding: EdgeInsets.only(left: 8.0, bottom: 8.0),
-          child: Text(
-            '本週熱度最高關鍵詞：',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: AppColors.darkText),
-          ),
-        ),
-        Wrap(
-          spacing: 8.0,
-          runSpacing: 8.0,
-          children: (topCategories.isNotEmpty
-                  ? topCategories.take(6)
-                  : const [])
-              .map((cat) {
-            final name = cat['name']?.toString() ?? '';
-            final percent = (cat['percentage'] is num) ? (cat['percentage'] as num).toInt() : 0;
-            final color = percent >= 30
-                ? AppColors.dangerRed
-                : (percent >= 15 ? AppColors.primaryGreen : AppColors.userGray);
-            return _buildPill('$name ($percent%)', color);
-          }).toList(),
-        ),
-        const SizedBox(height: 20),
-      ],
-    );
-  }
-
-  // MARK: Tab 2: 傳播模式分析
-  Widget _buildPropagationModelContent() {
-    final List<ChartData> pieData = _reportData[2]?['chart_data'];
-    // 從統計資料取得通道分佈（動態）
-    final List<dynamic> channels = _statsData?['propagationChannels'] ?? [];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // 圓餅圖卡片
-        _buildVisualCard(
-          title: '傳播途徑分佈',
-          onViewAll: () => _showFullReportModal(),
-          child: AiPieChart(data: pieData),
-        ),
-        const SizedBox(height: 20),
-
-        // 關鍵傳播節點
-        const Padding(
-          padding: EdgeInsets.only(left: 8.0, bottom: 8.0),
-          child: Text(
-            '關鍵傳播節點：',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: AppColors.darkText),
-          ),
-        ),
-        Wrap(
-          spacing: 8.0,
-          runSpacing: 8.0,
-          children: (channels.isNotEmpty ? channels : const [])
-              .map<Widget>((c) {
-            final label = c['channel']?.toString() ?? '';
-            final pct = (c['percentage'] is num) ? (c['percentage'] as num).toInt() : 0;
-            Color color;
-            if (label.contains('社群')) {
-              color = AppColors.dangerRed;
-            } else if (label.contains('私人')) {
-              color = AppColors.primaryGreen;
-            } else {
-              color = AppColors.userGray;
-            }
-            return _buildPill('$label ($pct%)', color);
-          }).toList(),
-        ),
-        const SizedBox(height: 20),
-      ],
-    );
-  }
-
-  // 報告區塊標題與「查看完整報告」按鈕
+  // 報告區塊標題
   Widget _buildReportSectionHeader({required String title, required VoidCallback onViewAll}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: AppColors.darkText,
-            ),
-          ),
-          GestureDetector(
-            onTap: onViewAll,
-            child: const Row(
-              children: [
-                Text(
-                  '查看完整報告',
-                  style: TextStyle(
-                    color: AppColors.userGray,
-                    fontSize: 14,
-                  ),
-                ),
-                Icon(
-                  Icons.arrow_forward_ios,
-                  color: AppColors.userGray,
-                  size: 14,
-                ),
-              ],
-            ),
-          ),
-        ],
+      child: Text(
+        title,
+        style: const TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+          color: AppColors.darkText,
+        ),
       ),
     );
   }
@@ -717,7 +580,7 @@ class _AiReportPageState extends State<AiReportPage> {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => FullReportModal(
-          initialTabIndex: _selectedTabIndex,
+          initialTabIndex: 0, // 只保留假訊息偵測分頁
           reportData: null, // 改為由後端動態取得完整報告
         ),
         fullscreenDialog: true,
@@ -906,31 +769,49 @@ class _BarChartPainter extends CustomPainter {
     const double barWidth = 15.0;
     const double barRadius = 4.0;
     const double padding = 10.0;
-    final double maxValue = data.map((d) => d.value).reduce((a, b) => a > b ? a : b);
+    final double maxValue = data.map((d) => d.total).reduce((a, b) => a > b ? a : b);
     final double spacing = (size.width - (data.length * barWidth)) / (data.length + 1);
 
     for (int i = 0; i < data.length; i++) {
       final item = data[i];
-      final double barHeight = (item.value / maxValue) * (size.height - padding * 2);
-      final Color barColor = item.isHighRisk ? AppColors.dangerRed : AppColors.primaryGreen;
+      final double verifiedHeight = (item.verified / maxValue) * (size.height - padding * 2);
+      final double suspiciousHeight = (item.suspicious / maxValue) * (size.height - padding * 2);
+      final double totalHeight = verifiedHeight + suspiciousHeight;
 
       // X 軸位置
       final double xCenter = spacing + i * (barWidth + spacing) + barWidth / 2;
-      final double yTop = size.height - padding - barHeight;
 
-      // 繪製圓角矩形柱狀圖
-      final rect = RRect.fromRectAndCorners(
-        Rect.fromCenter(
-          center: Offset(xCenter, size.height - padding - barHeight / 2),
-          width: barWidth,
-          height: barHeight,
-        ),
-        topLeft: const Radius.circular(barRadius),
-        topRight: const Radius.circular(barRadius),
-      );
+      // 繪製待查證部分（紅色，在上方）
+      if (suspiciousHeight > 0) {
+        final suspiciousRect = RRect.fromRectAndCorners(
+          Rect.fromLTWH(
+            xCenter - barWidth / 2,
+            size.height - padding - totalHeight,
+            barWidth,
+            suspiciousHeight,
+          ),
+          topLeft: const Radius.circular(barRadius),
+          topRight: const Radius.circular(barRadius),
+        );
+        final suspiciousPaint = Paint()..color = AppColors.dangerRed;
+        canvas.drawRRect(suspiciousRect, suspiciousPaint);
+      }
 
-      final paint = Paint()..color = barColor;
-      canvas.drawRRect(rect, paint);
+      // 繪製已查證部分（綠色，在下方）
+      if (verifiedHeight > 0) {
+        final verifiedRect = RRect.fromRectAndCorners(
+          Rect.fromLTWH(
+            xCenter - barWidth / 2,
+            size.height - padding - verifiedHeight,
+            barWidth,
+            verifiedHeight,
+          ),
+          bottomLeft: const Radius.circular(barRadius),
+          bottomRight: const Radius.circular(barRadius),
+        );
+        final verifiedPaint = Paint()..color = AppColors.primaryGreen;
+        canvas.drawRRect(verifiedRect, verifiedPaint);
+      }
 
       // 繪製底部標籤
       final textPainterLabel = TextPainter(
@@ -943,15 +824,13 @@ class _BarChartPainter extends CustomPainter {
       textPainterLabel.layout();
       textPainterLabel.paint(canvas, Offset(xCenter - textPainterLabel.width / 2, size.height - padding + 5));
 
-      // **舊的圖標繪製邏輯已移除**
-
       // 點擊後顯示數值
       if (i == tappedIndex) {
         final textPainterValue = TextPainter(
           text: TextSpan(
-            text: item.value.round().toString(),
-            style: TextStyle(
-              color: barColor.darken(0.3),
+            text: '${item.total.round()}',
+            style: const TextStyle(
+              color: AppColors.darkText,
               fontSize: 12,
               fontWeight: FontWeight.bold,
             ),
@@ -962,7 +841,7 @@ class _BarChartPainter extends CustomPainter {
         // 數值顯示在柱體頂部上方
         textPainterValue.paint(
           canvas,
-          Offset(xCenter - textPainterValue.width / 2, yTop - textPainterValue.height - 5),
+          Offset(xCenter - textPainterValue.width / 2, size.height - padding - totalHeight - textPainterValue.height - 5),
         );
       }
     }
@@ -1146,7 +1025,7 @@ class _LineChartPainter extends CustomPainter {
 }
 
 
-/// 模擬完整報告 Modal (包含 3 個 Tab)
+/// 模擬完整報告 Modal (只保留假訊息偵測分頁)
 class FullReportModal extends StatefulWidget {
   final int initialTabIndex;
   final Map<int, Map<String, dynamic>>? reportData; // 可為 null，為 null 則改為呼叫後端取得
@@ -1161,15 +1040,13 @@ class FullReportModal extends StatefulWidget {
   State<FullReportModal> createState() => _FullReportModalState();
 }
 
-class _FullReportModalState extends State<FullReportModal> with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+class _FullReportModalState extends State<FullReportModal> {
   Map<int, Map<String, dynamic>>? _report; // 動態/本地都映射到相同結構
   bool _loading = true;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this, initialIndex: widget.initialTabIndex);
     _initReport();
   }
 
@@ -1192,13 +1069,12 @@ class _FullReportModalState extends State<FullReportModal> with SingleTickerProv
       return;
     }
 
-    // 將後端格式映射為舊有 UI 可直接使用的資料結構
+    // 只取第一個分頁（假訊息偵測）
     List<dynamic> tabs = report['tabs'] as List<dynamic>? ?? [];
     Map<int, Map<String, dynamic>> mapped = {};
 
-    for (int i = 0; i < tabs.length && i < 3; i++) {
-      final t = tabs[i] as Map<String, dynamic>;
-      final key = i; // 對應 0/1/2 三個分頁
+    if (tabs.isNotEmpty) {
+      final t = tabs[0] as Map<String, dynamic>;
       final chartType = (t['chartType'] ?? '').toString();
       final meta = (t['meta'] as Map<String, dynamic>?) ?? const {};
 
@@ -1207,9 +1083,9 @@ class _FullReportModalState extends State<FullReportModal> with SingleTickerProv
         final weekly = (t['weeklyReports'] as List<dynamic>? ?? []);
         chartData = weekly.map((r) {
           final day = r['day']?.toString() ?? '';
+          final verified = (r['verified'] is num) ? (r['verified'] as num).toDouble() : 0.0;
           final suspicious = (r['suspicious'] is num) ? (r['suspicious'] as num).toDouble() : 0.0;
-          final isHigh = suspicious > 20;
-          return BarData(suspicious, isHigh, day);
+          return BarData(verified, suspicious, day);
         }).toList();
       } else if (chartType == 'line') {
         final line = (t['line'] as List<dynamic>? ?? []);
@@ -1233,7 +1109,7 @@ class _FullReportModalState extends State<FullReportModal> with SingleTickerProv
         chartData = const [];
       }
 
-      mapped[key] = {
+      mapped[0] = {
         'title': t['title']?.toString() ?? '',
         'content': t['content']?.toString() ?? '',
         'chart_type': chartType,
@@ -1249,15 +1125,7 @@ class _FullReportModalState extends State<FullReportModal> with SingleTickerProv
   }
 
   @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final List<String> tabTitles = ['假訊息偵測', '新聞趨勢', '傳播模式'];
-
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
       appBar: AppBar(
@@ -1270,29 +1138,18 @@ class _FullReportModalState extends State<FullReportModal> with SingleTickerProv
           icon: const Icon(Icons.close),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        bottom: TabBar(
-          controller: _tabController,
-          labelColor: AppColors.primaryGreen,
-          unselectedLabelColor: AppColors.userGray,
-          indicatorColor: AppColors.primaryGreen,
-          tabs: tabTitles.map((title) => Tab(text: title)).toList(),
-        ),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator(color: AppColors.primaryGreen))
-          : TabBarView(
-              controller: _tabController,
-              children: (_report ?? {}).entries.map((entry) {
-                final data = entry.value;
-                return _buildReportTabView(
-                  title: data['title'],
-                  content: data['content'],
-                  chartData: data['chart_data'],
-                  chartType: data['chart_type'],
-                  meta: (data['meta'] as Map<String, dynamic>?),
-                );
-              }).toList(),
-            ),
+          : _report != null && _report!.containsKey(0)
+              ? _buildReportTabView(
+                  title: _report![0]!['title'],
+                  content: _report![0]!['content'],
+                  chartData: _report![0]!['chart_data'],
+                  chartType: _report![0]!['chart_type'],
+                  meta: (_report![0]!['meta'] as Map<String, dynamic>?),
+                )
+              : const Center(child: Text('無法載入報告')),
     );
   }
 

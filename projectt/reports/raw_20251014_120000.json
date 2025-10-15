@@ -1,0 +1,49 @@
+{
+  "mode": "KEYWORD",
+  "items": [
+    {
+      "index": 1,
+      "title": "台灣大選將至，假訊息充斥社群平台，專家呼籲民眾提高警覺",
+      "url": "https://news.example.com/politics-election-fake-news",
+      "domain": "news.example.com",
+      "content": "隨著台灣大選進入倒數，社群平台上出現大量與候選人相關的假訊息，專家建議民眾查證來源，勿輕信未經證實的消息。",
+      "ann_features": {
+        "source_entity_score": 0.8,
+        "domain_score": 0.7
+      },
+      "short_judgement": "選舉期間假訊息增加，需多加留意。",
+      "model_score": 4,
+      "model_proba": [
+        0.1,
+        0.2,
+        0.6,
+        0.05,
+        0.03,
+        0.02
+      ],
+      "crawled_at": "2025-10-14T12:00:00"
+    },
+    {
+      "index": 2,
+      "title": "新冠疫苗副作用謠言再起，醫師澄清無科學根據",
+      "url": "https://health.example.com/vaccine-fake-news",
+      "domain": "health.example.com",
+      "content": "近期網路流傳新冠疫苗會導致嚴重副作用，醫師表示這些說法缺乏科學證據，呼籲民眾勿信謠傳。",
+      "ann_features": {
+        "source_entity_score": 0.9,
+        "domain_score": 0.8
+      },
+      "short_judgement": "疫苗安全性高，謠言不可信。",
+      "model_score": 5,
+      "model_proba": [
+        0.05,
+        0.1,
+        0.8,
+        0.03,
+        0.01,
+        0.01
+      ],
+      "crawled_at": "2025-10-14T12:00:00"
+    }
+  ]
+}
