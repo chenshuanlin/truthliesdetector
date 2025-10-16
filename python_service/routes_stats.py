@@ -149,42 +149,25 @@ def fake_news_stats():
     sys.stderr.write(f"[DEBUG-ERR] verified_count={verified_count}, unverified_count={unverified_count}\n")
     sys.stderr.flush()
     
-    # 總樣本數
-    total_count = verified_count + unverified_count
-    
-    if total_count == 0:
-        # 若沒有查證資料，回傳空結果
-        return jsonify({
-            'ok': True,
-            'stats': {
-                'totalVerified': 0,
-                'totalSuspicious': 0,
-                'aiAccuracy': 0,  # 無數據時辨識率為 0
-                'weeklyReports': [],
-                'topCategories': [],
-                'propagationChannels': [],
-                'sentiment': {'neutral': 80, 'negative': 10, 'positive': 10},
-                'meta': {
-                    'fetchedAt': datetime.utcnow().isoformat(timespec='seconds') + 'Z',
-                    'source': 'Verification Database (projectt/reports)',
-                    'sourceCount': 0,
-                    'headlineSamples': [],
-                }
-            }
-        })
-    
-    # 取得每日分佈
+
+    # 只統計近7天的資料
     verified_daily = get_daily_distribution(verified_items, 7)
     unverified_daily = get_daily_distribution(unverified_items, 7)
-    
-    # 建立近 7 天的週報
+    # 近7天總數
+    verified_week = sum(verified_daily.values())
+    unverified_week = sum(unverified_daily.values())
+    total_week = verified_week + unverified_week
+    if total_week == 0:
+        ai_accuracy = 0
+    else:
+        ai_accuracy = round((verified_week / total_week) * 100)
+
+    # 週報圖表資料
     now = datetime.utcnow()
     start = (now - timedelta(days=6)).date()
     weekly = []
     for i in range(7):
         d = start + timedelta(days=i)
-        # day_offset: 0=今天, 1=昨天, ..., 6=7天前
-        # 但我們要從最舊到最新，所以反轉索引
         day_offset = 6 - i
         verified = verified_daily.get(day_offset, 0)
         suspicious = unverified_daily.get(day_offset, 0)
@@ -193,34 +176,35 @@ def fake_news_stats():
             'verified': verified,
             'suspicious': suspicious,
         })
-    
-    # 從查證資料提取標題做分類
-    all_titles = [item.get('title', '') for item in (verified_items + unverified_items) if item.get('title')]
+
+    # 只用近7天的標題做分類
+    week_items = []
+    for item in verified_items + unverified_items:
+        crawled_at = item.get('crawled_at')
+        if crawled_at:
+            try:
+                crawled_time = datetime.fromisoformat(crawled_at)
+                if (datetime.utcnow().date() - crawled_time.date()).days < 7:
+                    week_items.append(item)
+            except Exception:
+                continue
+        else:
+            week_items.append(item)  # 沒有時間戳的也算進來
+    all_titles = [item.get('title', '') for item in week_items if item.get('title')]
     top_categories = _categorize_titles(all_titles)
     propagation_channels = _infer_channels(all_titles)
     sentiment = _sentiment_from_titles(all_titles)
-    
     meta = {
         'fetchedAt': datetime.utcnow().isoformat(timespec='seconds') + 'Z',
         'source': 'Verification Database (projectt/reports)',
-        'sourceCount': total_count,
+        'sourceCount': total_week,
         'headlineSamples': all_titles[:3],
     }
-    
-    # 計算 AI 辨識率
-    total_detected = verified_count + unverified_count
-    # ai_accuracy = round((verified_count / total_detected * 100)) if total_detected > 0 else 0
-    ai_accuracy = 70  # 暫時強制設為 70 測試
-    import sys
-    print(f"[DEBUG-OUT] AI 辨識率計算: {verified_count} / {total_detected} * 100 = {ai_accuracy}%", flush=True)
-    sys.stderr.write(f"[DEBUG-ERR] AI 辨識率計算: {verified_count} / {total_detected} * 100 = {ai_accuracy}%\n")
-    sys.stderr.flush()
-
     return jsonify({
         'ok': True,
         'stats': {
-            'totalVerified': verified_count,
-            'totalSuspicious': unverified_count,
+            'totalVerified': verified_week,
+            'totalSuspicious': unverified_week,
             'aiAccuracy': ai_accuracy,
             'weeklyReports': weekly,
             'topCategories': top_categories,

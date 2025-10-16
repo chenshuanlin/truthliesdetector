@@ -85,7 +85,7 @@ class ApiService {
       if (resp.statusCode == 200) {
         final data = jsonDecode(resp.body);
         // 根據實際 API 回傳內容調整
-        return data['success'] == true || data['stats'] == true;
+        return data['ok'] == true || data['success'] == true || data['stats'] == true;
       }
       return false;
     } catch (e) {

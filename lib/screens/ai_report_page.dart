@@ -336,12 +336,9 @@ class _AiReportPageState extends State<AiReportPage> {
   Widget _buildMetaLine() {
     final meta = _statsData?['meta'] ?? _statsData?['Meta'] ?? _statsData?['metadata'] ?? (_statsData?['stats']?['meta']);
     String fetchedAt = '';
-    int sourceCount = 0;
     if (meta is Map) {
       final fetched = meta['fetchedAt']?.toString() ?? '';
       fetchedAt = formatUtcIsoToLocal(fetched);
-      final sc = meta['sourceCount'];
-      if (sc is int) sourceCount = sc; else if (sc is String) sourceCount = int.tryParse(sc) ?? 0;
     }
     return Row(
       children: [
@@ -350,7 +347,7 @@ class _AiReportPageState extends State<AiReportPage> {
         Flexible(
           child: Text(
             fetchedAt.isNotEmpty
-                ? '最新抓取時間 $fetchedAt · 來源樣本 $sourceCount 則'
+                ? '最新抓取時間 $fetchedAt'
                 : '正在載入最新資料來源…',
             style: const TextStyle(fontSize: 12, color: AppColors.userGray),
             overflow: TextOverflow.ellipsis,
