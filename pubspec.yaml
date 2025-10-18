@@ -8,10 +8,7 @@ environment:
   sdk: ^3.9.0
 
 dependencies:
-  flutter:
-    sdk: flutter
-
-  # iOS風格icons
+  flutter_overlay_window: ^0.4.3
   cupertino_icons: ^1.0.8
 
   # 檔案選擇 (支援 Web, Android, iOS, Desktop)

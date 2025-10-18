@@ -4,9 +4,9 @@ import 'package:truthliesdetector/screens/AIchat.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:screenshot/screenshot.dart';
 import 'dart:typed_data';
-import 'package:truthliesdetector/screens/home_page.dart';
+import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 
-/// 可拖曳的懸浮球，支援展開子選單
+/// 全域懸浮球元件，可在 App 內外使用。
 class FloatingActionMenu extends StatefulWidget {
   final ScreenshotController? screenshotController;
   final Function(int)? onTap;
@@ -30,9 +30,9 @@ class _FloatingActionMenuState extends State<FloatingActionMenu>
   bool _isOpen = false;
   Offset _offset = Offset.zero;
 
-  final double _fabSize = 56.0; // 主懸浮球大小
-  final double _childFabSize = 45.0; // 子按鈕大小
-  final double _spacing = 60.0; // 子按鈕間距
+  final double _fabSize = 56.0;
+  final double _childFabSize = 45.0;
+  final double _spacing = 60.0;
   final double _bottomNavBarEstimatedHeight = 80.0;
 
   @override
@@ -46,7 +46,7 @@ class _FloatingActionMenuState extends State<FloatingActionMenu>
       CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
     );
 
-    // 初始化位置（右下角）
+    // 預設右下角位置
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _offset = Offset(
         MediaQuery.of(context).size.width - _fabSize - 16.0,
@@ -65,7 +65,9 @@ class _FloatingActionMenuState extends State<FloatingActionMenu>
     super.dispose();
   }
 
-  /// 切換展開/收合
+  // --------------------------------------------------
+  // 懸浮球開關控制
+  // --------------------------------------------------
   void _toggleMenu() {
     setState(() {
       _isOpen = !_isOpen;
@@ -77,68 +79,79 @@ class _FloatingActionMenuState extends State<FloatingActionMenu>
     });
   }
 
-  /// 截圖/選擇圖片 → AI 分析
+  // --------------------------------------------------
+  // 截圖/選圖片 → AIchat
+  // --------------------------------------------------
   Future<void> _recognizeImage() async {
     _toggleMenu();
-    if (widget.screenshotController != null) {
-      final Uint8List? imageBytes = await widget.screenshotController!.capture();
+    try {
+      Uint8List? imageBytes;
+      if (widget.screenshotController != null) {
+        imageBytes = await widget.screenshotController!.capture();
+      } else {
+        final pick = await FilePicker.platform.pickFiles(type: FileType.image);
+        if (pick != null && pick.files.isNotEmpty) {
+          imageBytes = pick.files.single.bytes;
+        }
+      }
+
       if (imageBytes != null) {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => AIchat(
-              initialQuery: '請幫我辨識這張截圖',
+            builder: (_) => AIchat(
+              initialQuery: '請幫我辨識這張圖片。',
               capturedImageBytes: imageBytes,
             ),
           ),
         );
-      }
-    } else {
-      FilePickerResult? result =
-          await FilePicker.platform.pickFiles(type: FileType.image);
-      if (result != null) {
-        String filePath = result.files.single.name;
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) =>
-                AIchat(initialQuery: '請幫我辨識這張圖片: $filePath'),
-          ),
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('未選擇圖片')),
         );
       }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('圖片辨識失敗：$e')),
+      );
     }
   }
 
-  /// 輸入網址 → AI 分析
+  // --------------------------------------------------
+  // 手動輸入網址分析
+  // --------------------------------------------------
   void _showUrlInputDialog() {
     _toggleMenu();
-    TextEditingController urlController = TextEditingController();
+    final TextEditingController urlController = TextEditingController();
     showDialog(
       context: context,
       builder: (BuildContext dialogContext) {
         return AlertDialog(
-          title: const Text('輸入網址進行搜尋'),
+          title: const Text('輸入網址進行查證'),
           content: TextField(
             controller: urlController,
-            decoration: const InputDecoration(hintText: '請輸入網址'),
+            decoration: const InputDecoration(hintText: '請輸入網址（http 或 https 開頭）'),
           ),
-          actions: <Widget>[
+          actions: [
             TextButton(
               child: const Text('取消'),
               onPressed: () => Navigator.of(dialogContext).pop(),
             ),
             ElevatedButton(
-              child: const Text('搜尋'),
+              child: const Text('查證'),
               onPressed: () {
-                String url = urlController.text;
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => AIchat(
-                        initialQuery: '請幫我辨識這個網址的內容: $url'),
-                  ),
-                );
-                Navigator.of(dialogContext).pop();
+                final url = urlController.text.trim();
+                if (url.isNotEmpty) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => AIchat(
+                        initialQuery: '請幫我分析這個網址的內容：$url',
+                      ),
+                    ),
+                  );
+                  Navigator.of(dialogContext).pop();
+                }
               },
             ),
           ],
@@ -147,16 +160,42 @@ class _FloatingActionMenuState extends State<FloatingActionMenu>
     );
   }
 
-  /// 開啟應用程式主頁面
-  void _openApp() {
+  // --------------------------------------------------
+  // 開啟主應用頁面
+  // --------------------------------------------------
+  void _openApp() async {
     _toggleMenu();
-    // 修正導航邏輯，使用 onTap 回呼函式切換到主頁面
     if (widget.onTap != null) {
-      widget.onTap!(0); // 0 是主頁面（HomePage）的索引
+      widget.onTap!(0);
+    } else {
+      // 若在懸浮模式中
+      if (!await FlutterOverlayWindow.isActive()) {
+        await FlutterOverlayWindow.closeOverlay();
+      }
     }
   }
 
-  /// 建立子按鈕
+  // --------------------------------------------------
+  // 在 App 外開啟懸浮球
+  // --------------------------------------------------
+  static Future<void> showGlobalBall() async {
+    if (!await FlutterOverlayWindow.isPermissionGranted()) {
+      await FlutterOverlayWindow.requestPermission();
+    }
+    await FlutterOverlayWindow.showOverlay(
+      height: 100,
+      width: 100,
+      alignment: OverlayAlignment.centerRight,
+      enableDrag: true,
+      overlayTitle: "TruthLiesDetector",
+      overlayContent: "AI懸浮球已啟動",
+      flag: OverlayFlag.defaultFlag,
+    );
+  }
+
+  // --------------------------------------------------
+  // 建立子按鈕
+  // --------------------------------------------------
   Widget _buildSubMenuButton({
     required Widget child,
     required VoidCallback onPressed,
@@ -184,15 +223,17 @@ class _FloatingActionMenuState extends State<FloatingActionMenu>
     );
   }
 
+  // --------------------------------------------------
+  // 畫面
+  // --------------------------------------------------
   @override
   Widget build(BuildContext context) {
     final double halfFabSize = _fabSize / 2;
     final double halfChildFabSize = _childFabSize / 2;
-    final double halfSpacing = _spacing / 2;
 
     return Stack(
       children: [
-        // 主懸浮球
+        // 主懸浮球（可拖曳）
         Positioned(
           left: _offset.dx,
           top: _offset.dy,
@@ -230,40 +271,40 @@ class _FloatingActionMenuState extends State<FloatingActionMenu>
           ),
         ),
 
-        // 子選單 (垂直排列在左側)
+        // 展開子選單
         if (_isOpen) ...{
-          // 開啟應用程式 (最上方)
+          // 開啟應用程式
           Positioned(
             left: _offset.dx - _spacing,
             top: _offset.dy + halfFabSize - halfChildFabSize - (_spacing * 1.5),
             child: _buildSubMenuButton(
-              heroTag: 'openAppFloatingButton',
-              child: const Icon(Icons.open_in_new, size: 22),
+              heroTag: 'openAppButton',
+              child: const Icon(Icons.home, size: 22),
               onPressed: _openApp,
               backgroundColor: Colors.white,
               foregroundColor: AppColors.primaryGreen,
             ),
           ),
-          
-          // 輸入網址 (第二個)
+
+          // 網址輸入
           Positioned(
             left: _offset.dx - _spacing,
             top: _offset.dy + halfFabSize - halfChildFabSize - (_spacing * 0.5),
             child: _buildSubMenuButton(
-              heroTag: 'searchFloatingButton',
+              heroTag: 'searchButton',
               child: const Icon(Icons.search, size: 22),
               onPressed: _showUrlInputDialog,
               backgroundColor: Colors.white,
               foregroundColor: AppColors.primaryGreen,
             ),
           ),
-          
-          // 截圖 (第三個)
+
+          // 圖片辨識
           Positioned(
             left: _offset.dx - _spacing,
             top: _offset.dy + halfFabSize - halfChildFabSize + (_spacing * 0.5),
             child: _buildSubMenuButton(
-              heroTag: 'cameraFloatingButton',
+              heroTag: 'cameraButton',
               child: const Icon(Icons.camera_alt, size: 22),
               onPressed: _recognizeImage,
               backgroundColor: Colors.white,
@@ -271,19 +312,16 @@ class _FloatingActionMenuState extends State<FloatingActionMenu>
             ),
           ),
 
-          // 關閉 (最下方)
+          // 關閉
           Positioned(
             left: _offset.dx - _spacing,
             top: _offset.dy + halfFabSize - halfChildFabSize + (_spacing * 1.5),
             child: _buildSubMenuButton(
-              heroTag: 'closeFloatingButton',
+              heroTag: 'closeButton',
               child: const Icon(Icons.close, size: 22),
               onPressed: () {
                 _toggleMenu();
-                // 修正：如果父層提供了 onClose 回呼函式，則呼叫它
-                if (widget.onClose != null) {
-                  widget.onClose!();
-                }
+                if (widget.onClose != null) widget.onClose!();
               },
               backgroundColor: Colors.white,
               foregroundColor: AppColors.primaryGreen,
