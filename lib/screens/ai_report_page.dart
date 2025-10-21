@@ -369,9 +369,9 @@ class _AiReportPageState extends State<AiReportPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 1. 本週假訊息監測報告 (Bar Chart)
+        // 1. 近七天假訊息監測報告 (Bar Chart)
         _buildVisualCard(
-          title: '本週假訊息監測報告',
+          title: '近七天假訊息監測報告',
           onViewAll: () => _showFullReportModal(),
           child: AiBarChart(data: weeklyData),
         ),
