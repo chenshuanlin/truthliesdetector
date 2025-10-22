@@ -80,17 +80,7 @@ class _MainLayoutState extends State<MainLayout> {
   late final List<Widget> _pages = [
     const HomePage(),
     // 🔹 第二頁：真假小助手（AIacc）
-    AIaccScreen(
-      onSendToChat: (convId, backendResult, query) {
-        Navigator.of(context).pushNamed(
-          AIchat.route,
-          arguments: {
-            'initialQuery': query,
-            'backendResult': backendResult,
-          },
-        );
-      },
-    ),
+    const AIaccScreen(),
     const SearchPage(),
     const ProfilePage(),
   ];

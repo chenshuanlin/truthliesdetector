@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:truthliesdetector/themes/app_colors.dart';
 import 'dart:typed_data';
+import 'package:truthliesdetector/themes/app_colors.dart';
 
 /// 訊息結構
 class Message {
@@ -20,17 +20,19 @@ class Message {
 }
 
 class AIchat extends StatefulWidget {
-  final String initialQuery;
+  final String? initialQuery;
   final Uint8List? capturedImageBytes;
   final Map<String, dynamic>? backendResult;
+  final int? userId; // 🧩 綁定使用者ID
 
   static const String route = '/aichat';
 
   const AIchat({
     super.key,
-    required this.initialQuery,
+    this.initialQuery,
     this.capturedImageBytes,
     this.backendResult,
+    this.userId,
   });
 
   @override
@@ -41,154 +43,221 @@ class _AIchatState extends State<AIchat> {
   final TextEditingController _textController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final List<Message> _messages = [];
-  bool _isTyping = false;
 
-  /// ✅ Flask 後端 API base
-  static const String _apiBase =
-      String.fromEnvironment('API_BASE', defaultValue: 'http://127.0.0.1:5000');
+  String? lastGeminiSummary;
+  bool _isLoadingHistory = false;
+
+  final String apiBase =
+      const String.fromEnvironment('API_BASE', defaultValue: 'http://127.0.0.1:5000');
 
   @override
   void initState() {
     super.initState();
-    _handleInitialMessage();
+    // 若有新的分析結果則開新對話，否則載入舊歷史
+    if (widget.backendResult != null) {
+      _initializeChat();
+    } else {
+      _loadChatHistoryFromServer();
+    }
   }
 
-  void _handleInitialMessage() {
-    if (widget.capturedImageBytes != null) {
+  // ============================================================
+  // 🧠 初始化新對話
+  // ============================================================
+  void _initializeChat() {
+    if (widget.initialQuery?.isNotEmpty ?? false) {
       _messages.add(Message(
-        text: '這是我的圖片，請幫我分析。',
+        text: widget.initialQuery!,
         sender: 'user',
         timestamp: DateTime.now(),
         imageBytes: widget.capturedImageBytes,
       ));
     }
 
-    _messages.add(Message(
-      text: widget.initialQuery,
-      sender: 'user',
-      timestamp: DateTime.now(),
-    ));
-
     if (widget.backendResult != null) {
-      final formatted = _formatBackendReport(widget.backendResult!);
+      final msg = _formatAIMessage(widget.backendResult!);
       _messages.add(Message(
-        text: formatted,
+        text: msg,
         sender: 'ai',
         timestamp: DateTime.now(),
       ));
-    } else {
-      _sendToBackend(widget.initialQuery, imageBytes: widget.capturedImageBytes);
+      lastGeminiSummary = msg;
     }
   }
 
-  /// ✅ 將 AIacc 結果整理成可讀格式
-  String _formatBackendReport(Map<String, dynamic> data) {
-    try {
-      final aiAcc = data['ai_acc_result'] ?? data;
-      final gemini = data['gemini_result'] ?? {};
-
-      final score = aiAcc['score'] ?? aiAcc['credibility_score'] ?? '—';
-      final level = aiAcc['level'] ?? aiAcc['可信度'] ?? '未知';
-      final summary = aiAcc['summary'] ?? gemini['summary'] ?? '';
-
-      return '''
-【AI 分析結果】
-可信度：$level
-分數：$score
-
-${summary.isNotEmpty ? 'AI 結論：$summary' : ''}
-''';
-    } catch (_) {
-      return '⚠️ 無法解析分析結果。';
-    }
-  }
-
-  /// ✅ 將文字或圖片發送給後端 Gemini 聊天接口
-  Future<void> _sendToBackend(String message, {Uint8List? imageBytes}) async {
-    setState(() => _isTyping = true);
-    _scrollToBottom();
+  // ============================================================
+  // 📜 載入歷史紀錄（延續上次對話）
+  // ============================================================
+  Future<void> _loadChatHistoryFromServer() async {
+    final userId = widget.userId ?? 0;
+    setState(() => _isLoadingHistory = true);
 
     try {
-      final uri = Uri.parse('$_apiBase/chat');
-
-      http.Response response;
-
-      if (imageBytes != null) {
-        // 若有圖片則使用 multipart/form-data
-        final request = http.MultipartRequest('POST', uri)
-          ..fields['message'] = message
-          ..files.add(http.MultipartFile.fromBytes(
-            'file',
-            imageBytes,
-            filename: 'uploaded_image.png',
-          ));
-
-        final streamedResponse = await request.send();
-        response = await http.Response.fromStream(streamedResponse);
-      } else {
-        // 純文字訊息使用 JSON 格式（防止 415 錯誤）
-        response = await http.post(
-          uri,
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'message': message}),
-        );
-      }
+      final response = await http.get(
+        Uri.parse('$apiBase/chat/history?user_id=$userId&limit=30'),
+      );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        final aiReply = data['reply'] ?? data['response'] ?? "AI 沒有回應內容。";
+        final data = jsonDecode(response.body);
+        final records = List<Map<String, dynamic>>.from(data['records'] ?? []);
 
         setState(() {
-          _messages.add(Message(
-            text: aiReply,
-            sender: 'ai',
-            timestamp: DateTime.now(),
-          ));
+          _messages.clear();
+          for (final item in records.reversed) {
+            final query = item['query_text'] ?? '';
+            final aiResult = item['gemini_result'] ?? {};
+            final reply = aiResult['reply'] ?? '';
+            final createdAt =
+                DateTime.tryParse(item['created_at'] ?? '') ?? DateTime.now();
+
+            if (query.isNotEmpty) {
+              _messages.add(Message(
+                text: query,
+                sender: 'user',
+                timestamp: createdAt,
+              ));
+            }
+            if (reply.isNotEmpty) {
+              _messages.add(Message(
+                text: reply,
+                sender: 'ai',
+                timestamp: createdAt,
+              ));
+            }
+          }
         });
       } else {
-        setState(() {
-          _messages.add(Message(
-            text: "⚠️ 後端伺服器錯誤 (${response.statusCode})",
-            sender: 'ai',
-            timestamp: DateTime.now(),
-          ));
-        });
+        debugPrint('⚠️ 載入聊天紀錄失敗 (${response.statusCode})');
       }
     } catch (e) {
-      setState(() {
-        _messages.add(Message(
-          text: "❌ 無法連線後端伺服器：$e",
-          sender: 'ai',
-          timestamp: DateTime.now(),
-        ));
-      });
-    } finally {
-      setState(() => _isTyping = false);
-      _scrollToBottom();
+      debugPrint('❌ 載入聊天紀錄錯誤：$e');
+    }
+
+    setState(() => _isLoadingHistory = false);
+  }
+
+  // ============================================================
+  // 🧩 整理 AI 回覆訊息（支援新版結構）
+  // ============================================================
+  String _formatAIMessage(Map<String, dynamic> result) {
+    if (result.containsKey('gemini_result')) {
+      final gemini = result['gemini_result'];
+      final reply = gemini['reply'] ?? '';
+      final comment = gemini['comment'] ?? '';
+      final mode = gemini['mode'] ?? '文字';
+      final intent = gemini['intent'] ?? 'verification';
+      final scores = gemini['scores'] ?? {};
+
+      final combined = scores['combined'] ?? {};
+      final text = scores['text'] ?? {};
+      final vision = scores['vision'] ?? {};
+
+      final combinedScore = combined['score']?.toString() ?? '—';
+      final combinedLevel = combined['level'] ?? '未知';
+      final textScore = text['score']?.toString() ?? '—';
+      final textLevel = text['level'] ?? '未知';
+      final visionScore = vision['score']?.toString() ?? '—';
+      final visionLevel = vision['level'] ?? '未知';
+
+      // 查詢型 → 不顯示可信度
+      if (intent == "inquiry") {
+        return '''
+🧠 Gemini 模式：查詢
+$reply
+$comment
+''';
+      }
+
+      // 查證型 → 顯示三層可信度
+      return '''
+🧠 Gemini 分析模式：$mode（查證）
+📊 綜合可信度：$combinedLevel（$combinedScore）
+📝 文字可信度：$textLevel（$textScore）
+📷 圖片可信度：$visionLevel（$visionScore）
+
+$reply
+$comment
+''';
+    } else {
+      // 舊格式相容（防止後端未更新）
+      final credibility = result['credibility_level'] ?? result['level'] ?? '未知';
+      final score = result['score']?.toString() ?? '—';
+      final summary = result['summary'] ?? result['reason'] ?? '無摘要';
+      return '''
+🖋 可信度分析結果
+【可信度】：$credibility（$score）
+$summary
+''';
     }
   }
 
-  void _handleSubmitted(String text) {
-    if (text.trim().isEmpty) return;
-    _textController.clear();
+  // ============================================================
+  // ✉️ 傳送訊息（Gemini 對話延伸）
+  // ============================================================
+  Future<void> _sendMessage() async {
+    final text = _textController.text.trim();
+    if (text.isEmpty) return;
 
     setState(() {
       _messages.add(Message(
-        text: text.trim(),
+        text: text,
         sender: 'user',
         timestamp: DateTime.now(),
       ));
+      _textController.clear();
     });
 
     _scrollToBottom();
-    _sendToBackend(text.trim());
+
+    try {
+      final response = await http.post(
+        Uri.parse('$apiBase/chat'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'user_id': widget.userId ?? 0,
+          'message': text,
+          'context': lastGeminiSummary ?? '',
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final result = jsonDecode(response.body);
+        final aiMsg = _formatAIMessage(result);
+
+        setState(() {
+          _messages.add(Message(
+            text: aiMsg,
+            sender: 'ai',
+            timestamp: DateTime.now(),
+          ));
+          lastGeminiSummary = aiMsg;
+        });
+      } else {
+        _messages.add(Message(
+          text: "⚠️ 對話失敗 (${response.statusCode})，請稍後再試。",
+          sender: 'ai',
+          timestamp: DateTime.now(),
+        ));
+      }
+    } catch (e) {
+      _messages.add(Message(
+        text: "❌ 無法連線至伺服器：$e",
+        sender: 'ai',
+        timestamp: DateTime.now(),
+      ));
+    }
+
+    _scrollToBottom();
   }
 
+  // ============================================================
+  // 🔽 自動滾動到底
+  // ============================================================
   void _scrollToBottom() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    Future.delayed(const Duration(milliseconds: 200), () {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
+          _scrollController.position.maxScrollExtent + 80,
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeOut,
         );
@@ -196,177 +265,109 @@ ${summary.isNotEmpty ? 'AI 結論：$summary' : ''}
     });
   }
 
+  // ============================================================
+  // 💬 UI：訊息泡泡
+  // ============================================================
+  Widget _buildMessageBubble(Message msg) {
+    final isUser = msg.sender == 'user';
+    final align = isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start;
+    final color = isUser ? AppColors.primaryGreen : Colors.grey.shade200;
+    final textColor = isUser ? Colors.white : Colors.black87;
+
+    return Column(
+      crossAxisAlignment: align,
+      children: [
+        Container(
+          margin: const EdgeInsets.symmetric(vertical: 5, horizontal: 10),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          constraints: const BoxConstraints(maxWidth: 320),
+          child: msg.imageBytes != null
+              ? Column(
+                  crossAxisAlignment: align,
+                  children: [
+                    Image.memory(msg.imageBytes!, height: 150, fit: BoxFit.cover),
+                    const SizedBox(height: 8),
+                    Text(msg.text, style: TextStyle(color: textColor, height: 1.5)),
+                  ],
+                )
+              : Text(msg.text, style: TextStyle(color: textColor, height: 1.5)),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(left: 12, right: 12),
+          child: Text(
+            _formatTime(msg.timestamp),
+            style: const TextStyle(fontSize: 10, color: Colors.grey),
+          ),
+        )
+      ],
+    );
+  }
+
+  String _formatTime(DateTime time) {
+    return "${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}";
+  }
+
+  // ============================================================
+  // 🧩 主畫面
+  // ============================================================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[100],
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        toolbarHeight: 80,
         backgroundColor: AppColors.primaryGreen,
-        elevation: 0,
+        title: const Text(
+          'AI 聊天助手',
+          style: TextStyle(color: Colors.white),
+        ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
-          'AI 分析結果介面',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        centerTitle: true,
       ),
       body: Column(
-        children: <Widget>[
+        children: [
+          if (_isLoadingHistory)
+            const Padding(
+              padding: EdgeInsets.all(12),
+              child: CircularProgressIndicator(color: AppColors.primaryGreen),
+            ),
           Expanded(
             child: ListView.builder(
               controller: _scrollController,
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10.0, vertical: 20.0),
-              itemCount: _messages.length + (_isTyping ? 1 : 0),
+              itemCount: _messages.length,
               itemBuilder: (context, index) {
-                if (index < _messages.length) {
-                  return _buildMessageBubble(_messages[index], context);
-                } else {
-                  return const Align(
-                    alignment: Alignment.centerLeft,
-                    child: Padding(
-                      padding:
-                          EdgeInsets.symmetric(horizontal: 15, vertical: 10),
-                      child: Text(
-                        "AI 正在輸入中...",
-                        style: TextStyle(
-                          fontStyle: FontStyle.italic,
-                          color: AppColors.userGray,
-                        ),
-                      ),
-                    ),
-                  );
-                }
+                return _buildMessageBubble(_messages[index]);
               },
             ),
           ),
-          _buildInputArea(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInputArea() {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.primaryGreen,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, -5),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 8.0),
-      child: Row(
-        children: [
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10.0),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(25.0),
-              ),
-              child: TextField(
-                controller: _textController,
-                onSubmitted: _handleSubmitted,
-                decoration:
-                    const InputDecoration.collapsed(hintText: '輸入訊息...'),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8.0),
           Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 5,
-                  offset: const Offset(0, 2),
+            color: Colors.grey.shade100,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _textController,
+                    decoration: const InputDecoration(
+                      hintText: '輸入訊息...',
+                      border: InputBorder.none,
+                    ),
+                    onSubmitted: (_) => _sendMessage(),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.send, color: AppColors.primaryGreen),
+                  onPressed: _sendMessage,
                 ),
               ],
             ),
-            child: IconButton(
-              icon: const Icon(Icons.send, color: AppColors.primaryGreen),
-              onPressed: () => _handleSubmitted(_textController.text),
-            ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildMessageBubble(Message message, BuildContext context) {
-    final bool isUser = message.sender == 'user';
-    return Align(
-      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
-        margin: const EdgeInsets.symmetric(vertical: 5, horizontal: 8),
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.75,
-        ),
-        decoration: BoxDecoration(
-          color: isUser ? AppColors.primaryGreen : AppColors.lightGreenBG,
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(15),
-            topRight: const Radius.circular(15),
-            bottomLeft:
-                isUser ? const Radius.circular(15) : const Radius.circular(0),
-            bottomRight:
-                isUser ? const Radius.circular(0) : const Radius.circular(15),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 4,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (message.imageBytes != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8.0),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8.0),
-                  child: Image.memory(
-                    message.imageBytes!,
-                    fit: BoxFit.cover,
-                    width: double.infinity,
-                  ),
-                ),
-              ),
-            Text(
-              message.text,
-              style: TextStyle(
-                color: isUser ? Colors.white : AppColors.darkText,
-                fontSize: 16,
-              ),
-            ),
-            const SizedBox(height: 5),
-            Text(
-              '${message.timestamp.hour.toString().padLeft(2, '0')}:${message.timestamp.minute.toString().padLeft(2, '0')}',
-              style: TextStyle(
-                color: isUser ? Colors.white70 : AppColors.darkText,
-                fontSize: 10,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
