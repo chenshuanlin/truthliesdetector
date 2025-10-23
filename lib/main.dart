@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';        // ✅ 新增：載入環境變數
+import 'package:provider/provider.dart';
+import 'package:truthliesdetector/providers/user_provider.dart';
 import 'package:truthliesdetector/screens/AIacc.dart';
 import 'package:truthliesdetector/screens/login_page.dart';
 import 'package:truthliesdetector/screens/register_page.dart';
+//import 'package:truthliesdetector/screens/Article_page.dart';
 import 'package:truthliesdetector/screens/search_page.dart';
 import 'package:truthliesdetector/screens/collect_page.dart';
 import 'package:truthliesdetector/screens/history_page.dart';
@@ -12,50 +14,47 @@ import 'package:truthliesdetector/screens/splash_page.dart';
 import 'package:truthliesdetector/themes/app_colors.dart';
 import 'package:truthliesdetector/screens/AIchat.dart';
 import 'package:truthliesdetector/themes/app_drawer.dart';
+import 'package:truthliesdetector/screens/ai_report_page.dart'; // <<< 新增：導入 AI 報告頁面
 import 'package:truthliesdetector/screens/settings_page.dart';
 import 'package:truthliesdetector/themes/ball.dart';
 import 'package:screenshot/screenshot.dart';
 
-Future<void> main() async {
-  // 確保 Flutter 綁定初始化
-  WidgetsFlutterBinding.ensureInitialized();
-
-  // 載入 .env 檔
-  await dotenv.load(fileName: ".env");
-
+void main() {
   runApp(const MyApp());
 }
-
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Truths and Lies Detector',
-      theme: ThemeData(
-        primaryColor: AppColors.primaryGreen,
-        colorScheme: const ColorScheme.light(
-          primary: AppColors.primaryGreen,
+    return ChangeNotifierProvider(
+      create: (context) => UserProvider(),
+      child: MaterialApp(
+        title: 'Truths and Lies Detector',
+        theme: ThemeData(
+          primaryColor: AppColors.primaryGreen,
+          colorScheme: const ColorScheme.light(primary: AppColors.primaryGreen),
+          fontFamily: 'NotoSansSC',
+          useMaterial3: true,
         ),
-        fontFamily: 'NotoSansSC',
-        useMaterial3: true,
+        initialRoute: SplashPage.route,
+        routes: {
+          SplashPage.route: (context) => const SplashPage(),
+          LoginPage.route: (context) => const LoginPage(),
+          RegisterPage.route: (context) => const RegisterPage(),
+          MainLayout.route: (context) => const MainLayout(),
+          SearchPage.route: (context) => const SearchPage(),
+          CollectPage.route: (context) => const CollectPage(),
+          HistoryPage.route: (context) => const HistoryPage(),
+          ProfilePage.route: (context) => const ProfilePage(),
+          AIchat.route: (context) => const AIchat(initialQuery: ''),
+          AiReportPage.route: (context) =>
+              const AiReportPage(), // <<< 新增：註冊 AI 報告頁面路由
+          SettingsPage.route: (context) => const SettingsPage(),
+        },
+        debugShowCheckedModeBanner: false,
       ),
-      initialRoute: SplashPage.route,
-      routes: {
-        SplashPage.route: (context) => const SplashPage(),
-        LoginPage.route: (context) => const LoginPage(),
-        RegisterPage.route: (context) => const RegisterPage(),
-        MainLayout.route: (context) => const MainLayout(),
-        SearchPage.route: (context) => const SearchPage(),
-        CollectPage.route: (context) => const CollectPage(),
-        HistoryPage.route: (context) => const HistoryPage(),
-        ProfilePage.route: (context) => const ProfilePage(),
-        AIchat.route: (context) => const AIchat(initialQuery: ''),
-        SettingsPage.route: (context) => const SettingsPage(),
-      },
-      debugShowCheckedModeBanner: false,
     );
   }
 }
@@ -72,12 +71,14 @@ class _MainLayoutState extends State<MainLayout> {
   int _currentIndex = 0;
   final ScreenshotController _screenshotController = ScreenshotController();
 
-  // 控制懸浮球顯示
+  // 新增狀態變數來控制懸浮球的顯示
   bool _showFab = true;
 
   final List<Widget> _pages = [
     const HomePage(),
-    const HistoryPage(),
+    const AiReportPage(), // Index 1: 將「發現」頁面替換為 AiReportPage (AI報告與趨勢分析)
+    // TODO: 如果要將中間按鈕 (Index 2) 導向新的 AI 報告頁面，請將下一行註解，並取消再下一行的註解
+    // const AiReportPage(),
     const AIacc(),
     const SearchPage(),
     const ProfilePage(),
@@ -100,6 +101,7 @@ class _MainLayoutState extends State<MainLayout> {
           IconButton(
             icon: const Icon(Icons.notifications_none),
             onPressed: () {
+              // 導航到設定頁面
               Navigator.of(context).pushNamed(SettingsPage.route);
             },
           ),
@@ -113,9 +115,10 @@ class _MainLayoutState extends State<MainLayout> {
         controller: _screenshotController,
         child: Stack(
           children: [
-            IndexedStack(
-              index: _currentIndex,
-              children: _pages,
+            // 使用 Padding 包裹 IndexedStack，以在底部留出空間
+            Padding(
+              padding: const EdgeInsets.only(bottom: 80),
+              child: IndexedStack(index: _currentIndex, children: _pages),
             ),
             Positioned(
               bottom: 0,
@@ -126,16 +129,20 @@ class _MainLayoutState extends State<MainLayout> {
                 onTap: _onItemTapped,
               ),
             ),
+            // 根據 _showFab 狀態來顯示或隱藏懸浮球
             if (_showFab)
               FloatingActionMenu(
                 screenshotController: _screenshotController,
                 onTap: _onItemTapped,
+                // 提供 onClose 回呼函式來隱藏懸浮球
                 onClose: () {
                   setState(() {
                     _showFab = false;
                   });
                 },
               ),
+
+            // 增加一個按鈕來重新顯示懸浮球
             if (!_showFab)
               Positioned(
                 bottom: 100,
@@ -156,7 +163,7 @@ class _MainLayoutState extends State<MainLayout> {
   }
 }
 
-/// 自訂導覽列
+/// ⬇️ 自訂導覽列 Widget (保持不變)
 class CustomBottomNavBar extends StatelessWidget {
   final int currentIndex;
   final Function(int) onTap;
@@ -221,7 +228,12 @@ class CustomBottomNavBar extends StatelessWidget {
     );
   }
 
-  Widget _buildNavItem(IconData icon, String label, int index, Color mainGreen) {
+  Widget _buildNavItem(
+    IconData icon,
+    String label,
+    int index,
+    Color mainGreen,
+  ) {
     bool isSelected = currentIndex == index;
     return GestureDetector(
       onTap: () => onTap(index),

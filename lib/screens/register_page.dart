@@ -1,8 +1,7 @@
-import 'dart:convert';
-import 'dart:io' show Platform;  // ✅ 判斷平台
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'package:flutter_dotenv/flutter_dotenv.dart';   // ✅ 讀取環境變數
+import 'package:provider/provider.dart';
+import 'package:truthliesdetector/providers/user_provider.dart';
+import 'package:truthliesdetector/models/user.dart';
 import 'package:truthliesdetector/screens/login_page.dart';
 
 const _sage = Color(0xFF9EB79E);
@@ -28,82 +27,102 @@ class _RegisterPageState extends State<RegisterPage> {
   bool _obscure = true;
 
   InputDecoration _input(String label) => InputDecoration(
-    labelText: label,
-    filled: true,
-    fillColor: const Color(0xFFF7F8F7),
-    labelStyle: const TextStyle(color: Colors.black54),
-    contentPadding:
-    const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-    border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(color: Color(0xFFD5DDD8)),
-    ),
-    enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(color: Color(0xFFD5DDD8)),
-    ),
-    focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(color: _sageDeep, width: 1.2),
-    ),
-  );
+        labelText: label,
+        filled: true,
+        fillColor: const Color(0xFFF7F8F7),
+        labelStyle: const TextStyle(color: Colors.black54),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFFD5DDD8)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFFD5DDD8)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: _sageDeep, width: 1.2),
+        ),
+      );
 
-  // ✅ 註冊方法
   void _register() async {
-    if (!_formKey.currentState!.validate()) return;
-    if (!_agree) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('請先同意條款')),
-      );
-      return;
-    }
-
-    // 🔑 自動選 API URL
-    String apiUrl;
-    if (Platform.isAndroid) {
-      apiUrl = 'http://10.0.2.2:8000'; // Android 模擬器
-    } else if (Platform.isIOS) {
-      apiUrl = 'http://127.0.0.1:8000'; // iOS 模擬器
-    } else {
-      apiUrl = dotenv.env['API_URL'] ?? 'http://127.0.0.1:8000'; // 真機或 fallback
-    }
-
-    final url = Uri.parse('$apiUrl/register');   // ✅ 註冊呼叫 /register
-
-    final body = {
-      "username": _username.text,
-      "account": _account.text,
-      "password": _password.text,
-      "email": _email.text,
-      "phone": _phone.text,
-    };
-
-    try {
-      final response = await http.post(
-        url,
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode(body),
-      );
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
+    if (_formKey.currentState!.validate()) {
+      if (!_agree) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('註冊成功！請登入')),
+          const SnackBar(content: Text('請先同意條款')),
         );
-        Future.delayed(const Duration(seconds: 1), () {
-          Navigator.pushReplacementNamed(context, LoginPage.route);
-        });
-      } else {
-        final data = jsonDecode(response.body);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text(
-                  '註冊失敗: ${data['detail'] ?? response.statusCode}')),
-        );
+        return;
       }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('註冊失敗: $e')),
+
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
+      
+      // 顯示載入指示器
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
+        ),
       );
+
+      try {
+        // 建立用戶物件
+        final user = User(
+          account: _account.text,
+          username: _username.text,
+          password: _password.text,
+          email: _email.text,
+          phone: _phone.text.isEmpty ? null : _phone.text,
+        );
+
+        final result = await userProvider.register(user);
+        
+        // 關閉載入指示器
+        if (mounted) Navigator.of(context).pop();
+
+        if (result == 'success') {
+          // 註冊成功
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('註冊成功！請登入'),
+                backgroundColor: Colors.green,
+              ),
+            );
+
+            Future.delayed(const Duration(seconds: 1), () {
+              if (mounted) {
+                Navigator.pushReplacementNamed(context, LoginPage.route);
+              }
+            });
+          }
+        } else {
+          // 註冊失敗，顯示具體錯誤訊息
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(result),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        }
+      } catch (e) {
+        // 關閉載入指示器
+        if (mounted) Navigator.of(context).pop();
+        
+        // 顯示錯誤訊息
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('註冊失敗：$e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
     }
   }
 
@@ -140,34 +159,42 @@ class _RegisterPageState extends State<RegisterPage> {
                                   ?.copyWith(fontWeight: FontWeight.w700),
                             ),
                             const SizedBox(height: 4),
-                            Container(width: 40, height: 2, color: _sageDeep),
+                            Container(
+                              width: 40,
+                              height: 2,
+                              color: _sageDeep,
+                            ),
                           ],
                         ),
                         const SizedBox(height: 18),
+
+                        // 用戶名稱
                         TextFormField(
                           controller: _username,
                           decoration: _input('用戶名稱'),
                           validator: (v) =>
-                          v == null || v.isEmpty ? '請輸入用戶名稱' : null,
+                              v == null || v.isEmpty ? '請輸入用戶名稱' : null,
                         ),
                         const SizedBox(height: 12),
+
+                        // 帳號
                         TextFormField(
                           controller: _account,
                           decoration: _input('帳號'),
                           validator: (v) =>
-                          v == null || v.isEmpty ? '請輸入帳號' : null,
+                              v == null || v.isEmpty ? '請輸入帳號' : null,
                         ),
                         const SizedBox(height: 12),
+
+                        // 密碼
                         TextFormField(
                           controller: _password,
                           obscureText: _obscure,
                           decoration: _input('密碼').copyWith(
                             suffixIcon: IconButton(
-                              icon: Icon(
-                                _obscure
-                                    ? Icons.visibility
-                                    : Icons.visibility_off,
-                              ),
+                              icon: Icon(_obscure
+                                  ? Icons.visibility
+                                  : Icons.visibility_off),
                               onPressed: () =>
                                   setState(() => _obscure = !_obscure),
                             ),
@@ -179,6 +206,8 @@ class _RegisterPageState extends State<RegisterPage> {
                           },
                         ),
                         const SizedBox(height: 12),
+
+                        // 電子郵件
                         TextFormField(
                           controller: _email,
                           decoration: _input('電子郵件'),
@@ -189,6 +218,8 @@ class _RegisterPageState extends State<RegisterPage> {
                           },
                         ),
                         const SizedBox(height: 12),
+
+                        // 電話號碼
                         TextFormField(
                           controller: _phone,
                           decoration: _input('電話號碼'),
@@ -202,6 +233,8 @@ class _RegisterPageState extends State<RegisterPage> {
                           },
                         ),
                         const SizedBox(height: 8),
+
+                        // 條款同意
                         Row(
                           children: [
                             Checkbox(
@@ -214,6 +247,8 @@ class _RegisterPageState extends State<RegisterPage> {
                           ],
                         ),
                         const SizedBox(height: 6),
+
+                        // 註冊按鈕
                         ElevatedButton(
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF748874),
@@ -227,6 +262,8 @@ class _RegisterPageState extends State<RegisterPage> {
                           child: const Text('註冊'),
                         ),
                         const SizedBox(height: 8),
+
+                        // 已有帳號 → 回登入
                         TextButton(
                           style: TextButton.styleFrom(
                             foregroundColor: Colors.black,

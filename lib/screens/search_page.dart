@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'home_page.dart';
 import 'profile_page.dart';
 import 'AIacc.dart';
-import 'Article_page.dart';
+import 'Article_page.dart'; 
 
 class SearchPage extends StatefulWidget {
   const SearchPage({super.key});
@@ -39,7 +39,6 @@ class _SearchPageState extends State<SearchPage> {
         "某新藥治療效果據報提高87%，多國醫療團隊進行初步觀察，但尚未經過大規模臨床試驗或官方正式認證。",
         "source": "健康日報",
         "time": "3小時前",
-        "id": "1",
       },
       {
         "title": "新冠肺炎特效藥研發進展：臨床試驗階段",
@@ -49,7 +48,6 @@ class _SearchPageState extends State<SearchPage> {
         "多種新冠肺炎治療藥物已進入第三階段臨床試驗，初步結果顯示部分藥物具有良好療效並且安全性可控。",
         "source": "醫學期刊",
         "time": "昨天",
-        "id": "2",
       },
       {
         "title": "最新研究：新冠肺炎特效藥有效率分析",
@@ -59,7 +57,6 @@ class _SearchPageState extends State<SearchPage> {
         "最新研究顯示，新冠肺炎特效藥可降低約30%的住院率，但部分患者仍可能出現副作用，包括噁心、頭痛與疲倦。",
         "source": "科學報告",
         "time": "2天前",
-        "id": "3",
       },
     ];
 
@@ -156,13 +153,11 @@ class _SearchPageState extends State<SearchPage> {
                 const Spacer(),
                 InkWell(
                   onTap: () {
-                    // ✅ 跳轉到 ArticleDetailPage 並傳入 articleId
+                    // ✅ 改成跳到 Article_page.dart 的 ArticleDetailPage
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => ArticleDetailPage(
-                          articleId: int.parse(article["id"]!),
-                        ),
+                        builder: (_) => const ArticleDetailPage(),
                       ),
                     );
                   },

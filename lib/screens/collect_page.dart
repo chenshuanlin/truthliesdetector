@@ -1,25 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
-import 'dart:io' show Platform;
-import '../models/favorite_model.dart';
-import '../services/favorite_service.dart';
-import 'article_page.dart'; // 文章詳情頁
-
-// 新增 DTO：收藏 + 文章資料
-class FavoriteArticle {
-  final int articleId;
-  final String title;
-  final DateTime favoritedAt;
-
-  FavoriteArticle({
-    required this.articleId,
-    required this.title,
-    required this.favoritedAt,
-  });
-}
+import 'Article_page.dart'; // 引入文章頁面
 
 class CollectPage extends StatefulWidget {
-  static const String route = '/collect';
+  static const String route = '/collect'; 
   const CollectPage({super.key});
 
   @override
@@ -27,60 +10,38 @@ class CollectPage extends StatefulWidget {
 }
 
 class _CollectPageState extends State<CollectPage> {
-  List<FavoriteArticle> favoriteArticles = [];
-  bool isLoading = true;
-
-  // 這裡請換成登入後的實際 userId
-  final int currentUserId = 1;
-
-  late String apiBaseUrl;
+  List<Map<String, String>> favoriteArticles = [];
+  bool isLoading = true; // 載入中狀態
 
   @override
   void initState() {
     super.initState();
-    _setupApiUrl();
     _loadFavoriteArticles();
   }
 
-  void _setupApiUrl() {
-    if (kIsWeb) {
-      apiBaseUrl = 'http://localhost:8000';
-    } else if (Platform.isAndroid) {
-      apiBaseUrl = 'http://10.0.2.2:8000'; // 模擬器
-      // apiBaseUrl = 'http://192.168.0.111:8000'; // 實機測試時取消註解
-    } else {
-      apiBaseUrl = 'http://localhost:8000';
-    }
-  }
-
+  // 模擬後端取資料
   Future<void> _loadFavoriteArticles() async {
-    setState(() => isLoading = true);
-    try {
-      final favorites = await FavoriteService.fetchUserFavorites(currentUserId);
-
-      List<FavoriteArticle> fetched = [];
-      for (var fav in favorites) {
-        // 取得文章資料
-        final article = await FavoriteService.fetchArticleById(fav.articleId);
-        if (article != null) {
-          fetched.add(FavoriteArticle(
-            articleId: article['article_id'],
-            title: article['title'] ?? '無標題',
-            favoritedAt: fav.favoritedAt,
-          ));
-        }
-      }
-
-      setState(() {
-        favoriteArticles = fetched;
-        isLoading = false;
-      });
-    } catch (e) {
-      print('讀取收藏失敗: $e');
-      setState(() {
-        isLoading = false;
-      });
-    }
+    await Future.delayed(const Duration(seconds: 1)); // 模擬網路延遲
+    setState(() {
+      favoriteArticles = [
+        {
+          "title": "台灣氣象局：花蓮外海規模5.8地震，各地區震度統計出爐",
+          "date": "2025-05-20 08:30",
+          "content": "地震造成部分建築輕微損壞，無人員傷亡"
+        },
+        {
+          "title": "新冠肺炎疫苗接種率提升，公共衛生監測報告",
+          "date": "2025-05-19 14:10",
+          "content": "全台疫苗接種率達到85%，疫情控制良好"
+        },
+        {
+          "title": "科技公司發布最新AI語音助理，支援多國語言",
+          "date": "2025-05-18 09:00",
+          "content": "新產品具備即時翻譯與情緒辨識功能"
+        },
+      ];
+      isLoading = false;
+    });
   }
 
   @override
@@ -96,17 +57,18 @@ class _CollectPageState extends State<CollectPage> {
         title: const Text(
           "收藏文章",
           style: TextStyle(
-            color: Colors.white,
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
+            color: Colors.white,      // 白色文字
+            fontSize: 18,             // 字體大小 18
+            fontWeight: FontWeight.w600, // 半粗體
           ),
         ),
         centerTitle: false,
       ),
+
       body: isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator()) // 載入中
           : favoriteArticles.isEmpty
-          ? const Center(child: Text("目前沒有收藏的文章"))
+          ? const Center(child: Text("目前沒有收藏的文章")) // 無資料
           : ListView.builder(
         itemCount: favoriteArticles.length,
         padding: const EdgeInsets.symmetric(vertical: 8),
@@ -128,6 +90,7 @@ class _CollectPageState extends State<CollectPage> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // 左側綠線
                 Container(
                   width: 4,
                   height: 80,
@@ -140,7 +103,7 @@ class _CollectPageState extends State<CollectPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          article.title,
+                          article["title"] ?? "",
                           style: const TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w500,
@@ -152,13 +115,13 @@ class _CollectPageState extends State<CollectPage> {
                         Row(
                           children: [
                             const Icon(
-                              Icons.bookmark,
+                              Icons.bookmark_outline,
                               color: Color(0xFF9EB79E),
                               size: 20,
                             ),
                             const Spacer(),
                             Text(
-                              "收藏時間：${article.favoritedAt.toLocal()}",
+                              "發布時間：${article["date"] ?? ""}",
                               style: const TextStyle(
                                 fontSize: 12,
                                 color: Color(0xFF003366),
@@ -170,10 +133,8 @@ class _CollectPageState extends State<CollectPage> {
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (context) =>
-                                        ArticleDetailPage(
-                                            articleId:
-                                            article.articleId),
+                                    builder: (context) => ArticleDetailPage(
+                                    ),
                                   ),
                                 );
                               },
