@@ -12,6 +12,9 @@ import 'package:truthliesdetector/screens/profile_page.dart';
 import 'package:truthliesdetector/screens/home_page.dart';
 import 'package:truthliesdetector/screens/splash_page.dart';
 import 'package:truthliesdetector/themes/app_colors.dart';
+import 'package:flutter/widgets.dart';
+import 'route_observer.dart';
+import 'package:flutter/widgets.dart';
 import 'package:truthliesdetector/screens/AIchat.dart';
 import 'package:truthliesdetector/themes/app_drawer.dart';
 import 'package:truthliesdetector/screens/ai_report_page.dart'; // <<< 新增：導入 AI 報告頁面
@@ -32,6 +35,10 @@ class MyApp extends StatelessWidget {
     return ChangeNotifierProvider(
       create: (context) => UserProvider(),
       child: MaterialApp(
+        // RouteObserver used so pages (like HistoryPage) can refresh when they
+        // become visible again (didPopNext). See `RouteObserver` usage in
+        // `lib/screens/history_page.dart`.
+        navigatorObservers: [routeObserver],
         title: 'Truths and Lies Detector',
         theme: ThemeData(
           primaryColor: AppColors.primaryGreen,

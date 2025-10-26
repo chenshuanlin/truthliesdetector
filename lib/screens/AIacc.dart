@@ -3,10 +3,15 @@ import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:provider/provider.dart';
+import '../providers/user_provider.dart';
+import '../route_observer.dart';
 
 // 假設這些檔案已存在於您的專案中
 import 'package:truthliesdetector/themes/app_colors.dart';
 import 'package:truthliesdetector/screens/AIchat.dart';
+import 'chat_detail_page.dart';
 
 class AIacc extends StatefulWidget {
   static const String route = '/aiacc'; // ✅ route 名稱
@@ -17,11 +22,20 @@ class AIacc extends StatefulWidget {
   State<AIacc> createState() => _AIaccState();
 }
 
-class _AIaccState extends State<AIacc> {
+class _AIaccState extends State<AIacc> with RouteAware {
   final TextEditingController _textController = TextEditingController();
   String? _selectedFileName;
-  List<Map<String, String>> _historyQueries = [];
+  List<Map<String, dynamic>> _historyQueries = [];
   bool _isLoadingHistory = false;
+  bool _userListenerAttached = false;
+  bool _expandedHistory = false;
+
+  void _onUserChanged() {
+    // reload when user login state changes
+    if (mounted) {
+      _loadHistoryQueries();
+    }
+  }
 
   @override
   void initState() {
@@ -29,40 +43,42 @@ class _AIaccState extends State<AIacc> {
     _loadHistoryQueries();
   }
 
-  // 模擬後端歷史查詢 API
-  Future<List<Map<String, String>>> _fetchMockHistory() async {
-    // 模擬網路延遲
-    await Future.delayed(const Duration(seconds: 2));
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final modalRoute = ModalRoute.of(context);
+    if (modalRoute != null) {
+      routeObserver.subscribe(this, modalRoute);
+    }
+    // attach a listener to UserProvider so we reload history when login state changes
+    try {
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
+      if (!_userListenerAttached) {
+        userProvider.addListener(_onUserChanged);
+        _userListenerAttached = true;
+      }
+    } catch (_) {}
+  }
 
-    // 模擬一個成功的 API 回應
-    final mockResponse = [
-      {
-        'title': '台積電宣布在日本設立新廠',
-        'time': '3小時前',
-        'status': '已查證',
-        'confidence': '高可信度',
-      },
-      {
-        'title': '新冠疫苗含有微型晶片追蹤人體活動',
-        'time': '6小時前',
-        'status': '已查證',
-        'confidence': '低可信度',
-      },
-      {
-        'title': '2024年東京奧運會將取消',
-        'time': '1天前',
-        'status': '已查證',
-        'confidence': '低可信度',
-      },
-      {
-        'title': '某國總統突然辭職並下台',
-        'time': '2天前',
-        'status': '查證中',
-        'confidence': '中可信度',
-      },
-    ];
+  @override
+  void dispose() {
+    try {
+      routeObserver.unsubscribe(this);
+      if (_userListenerAttached) {
+        try {
+          final userProvider = Provider.of<UserProvider>(context, listen: false);
+          userProvider.removeListener(_onUserChanged);
+        } catch (_) {}
+        _userListenerAttached = false;
+      }
+    } catch (_) {}
+    super.dispose();
+  }
 
-    return List<Map<String, String>>.from(mockResponse);
+  @override
+  void didPopNext() {
+    // Refresh when returning from chat page
+    _loadHistoryQueries();
   }
 
   Future<void> _loadHistoryQueries() async {
@@ -74,24 +90,50 @@ class _AIaccState extends State<AIacc> {
     }
 
     try {
-      // 使用模擬的 API 函數代替真實的 http 請求
-      final List<Map<String, String>> data = await _fetchMockHistory();
-      if (mounted) {
-        setState(() {
-          _historyQueries = data;
-        });
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
+      final userId = userProvider.currentUser?.userId ?? 0;
+      if (userId == 0) {
+        // not logged in
+        if (mounted) setState(() => _historyQueries = []);
+        return;
+      }
+
+      final apiBase = kIsWeb ? 'http://127.0.0.1:5000' : 'http://10.0.2.2:5000';
+      final url = '$apiBase/chat/history?user_id=$userId&limit=10';
+      final resp = await http.get(Uri.parse(url));
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        final records = List<Map<String, dynamic>>.from(data['records'] ?? []);
+        final mapped = records.map((r) {
+          final query = (r['query'] ?? '').toString();
+          final createdAt = (r['created_at'] ?? '').toString();
+          final gemini = r['gemini_result'] ?? {};
+          final combinedLevel = gemini is Map && gemini['scores'] != null
+              ? (gemini['scores']['combined']?['level'] ?? '')
+              : (r['ai_acc_result']?['level'] ?? '');
+          final mode = gemini is Map ? (gemini['mode'] ?? '') : '';
+
+          return {
+            'title': query.length > 80 ? '${query.substring(0, 80)}...' : query,
+            'time': createdAt,
+            'status': mode == '' ? '已查證' : mode,
+            'confidence': combinedLevel ?? '未知',
+            // keep full payload for detail view
+            'query_full': query,
+            'gemini': gemini,
+            'created_at': createdAt,
+          };
+        }).toList();
+
+        if (mounted) setState(() => _historyQueries = List<Map<String, dynamic>>.from(mapped));
+      } else {
+        print('歷史查詢 API 回應錯誤: ${resp.statusCode} ${resp.body}');
       }
     } catch (e) {
       print('歷史查詢錯誤: $e');
-      if (mounted) {
-        setState(() {
-          _historyQueries = []; // 設置為空列表以顯示無資料訊息
-        });
-      }
+      if (mounted) setState(() => _historyQueries = []);
     } finally {
-      if (mounted) {
-        setState(() => _isLoadingHistory = false);
-      }
+      if (mounted) setState(() => _isLoadingHistory = false);
     }
   }
 
@@ -374,64 +416,91 @@ class _AIaccState extends State<AIacc> {
                         ListView.builder(
                           shrinkWrap: true,
                           physics: const NeverScrollableScrollPhysics(),
-                          itemCount: _historyQueries.length,
+                          itemCount: _expandedHistory ? _historyQueries.length : (_historyQueries.length > 3 ? 3 : _historyQueries.length),
                           itemBuilder: (context, index) {
                             final query = _historyQueries[index];
-                            return Card(
-                              margin: const EdgeInsets.only(bottom: 15),
-                              elevation: 2,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Padding(
-                                padding: const EdgeInsets.all(15.0),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      query['title']!,
-                                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                            final title = (query['title'] ?? '').toString();
+                            final status = (query['status'] ?? '').toString();
+                            final time = (query['time'] ?? '').toString();
+                            final confidence = (query['confidence'] ?? '').toString();
+                            return InkWell(
+                              onTap: () {
+                                // navigate to detail page showing full previous chat
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => ChatDetailPage(
+                                      query: query['query_full'] ?? title,
+                                      geminiResult: Map<String, dynamic>.from(query['gemini'] ?? {}),
+                                      createdAt: query['created_at'] ?? time,
                                     ),
-                                    const SizedBox(height: 8),
-                                    Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Row(
-                                          children: [
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                              decoration: BoxDecoration(
-                                                color: AppColors.primaryGreen,
-                                                borderRadius: BorderRadius.circular(5),
+                                  ),
+                                );
+                              },
+                              child: Card(
+                                margin: const EdgeInsets.only(bottom: 15),
+                                elevation: 2,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(15.0),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        title,
+                                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                decoration: BoxDecoration(
+                                                  color: AppColors.primaryGreen,
+                                                  borderRadius: BorderRadius.circular(5),
+                                                ),
+                                                child: Text(
+                                                  status,
+                                                  style: const TextStyle(color: Colors.black54, fontSize: 12),
+                                                ),
                                               ),
-                                              child: Text(
-                                                query['status']!,
-                                                style: const TextStyle(color: Colors.black54, fontSize: 12),
+                                              const SizedBox(width: 8),
+                                              Text(
+                                                time,
+                                                style: const TextStyle(color: Colors.grey, fontSize: 12),
                                               ),
-                                            ),
-                                            const SizedBox(width: 8),
-                                            Text(
-                                              query['time']!,
-                                              style: const TextStyle(color: Colors.grey, fontSize: 12),
-                                            ),
-                                          ],
-                                        ),
-                                        Text(
-                                          query['confidence']!,
-                                          style: TextStyle(
-                                            color: _getConfidenceColor(query['confidence']!),
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.bold,
+                                            ],
                                           ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
+                                          Text(
+                                            confidence,
+                                            style: TextStyle(
+                                              color: _getConfidenceColor(confidence),
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
                             );
                           },
                         ),
+                        if (_historyQueries.length > 3)
+                          Align(
+                            alignment: Alignment.center,
+                            child: TextButton(
+                              onPressed: () => setState(() => _expandedHistory = !_expandedHistory),
+                              child: Text(_expandedHistory ? '顯示較少' : '顯示全部'),
+                            ),
+                          ),
                       ],
                     ),
                 ],

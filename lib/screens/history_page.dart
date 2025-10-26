@@ -1,28 +1,88 @@
 import 'package:flutter/material.dart';
-import 'Article_page.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:provider/provider.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import '../providers/user_provider.dart';
+import 'chat_detail_page.dart';
+import '../route_observer.dart';
 
-class HistoryPage extends StatelessWidget {
-  static const String route = '/history'; 
+class HistoryPage extends StatefulWidget {
+  static const String route = '/history';
   const HistoryPage({super.key});
 
-  // 模擬瀏覽紀錄資料
-  final List<Map<String, String>> history = const [
-    {
-      "title": "台灣氣象局：花蓮外海規模5.8地震，各地區震度統計出爐",
-      "date": "2025-05-20 08:30",
-      "content": "地震造成部分建築輕微損壞，無人員傷亡"
-    },
-    {
-      "title": "新冠肺炎疫苗接種率提升，公共衛生監測報告",
-      "date": "2025-05-19 14:10",
-      "content": "全台疫苗接種率達到85%，疫情控制良好"
-    },
-    {
-      "title": "科技公司發布最新AI語音助理，支援多國語言",
-      "date": "2025-05-18 09:00",
-      "content": "新產品具備即時翻譯與情緒辨識功能"
-    },
-  ];
+  @override
+  State<HistoryPage> createState() => _HistoryPageState();
+}
+
+class _HistoryPageState extends State<HistoryPage> with RouteAware {
+  bool _loading = false;
+  List<Map<String, dynamic>> _records = [];
+
+  String get apiBase => kIsWeb ? 'http://127.0.0.1:5000' : 'http://10.0.2.2:5000';
+
+  @override
+  void initState() {
+    super.initState();
+    debugPrint('HistoryPage.initState: apiBase=$apiBase');
+    _loadHistory();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // subscribe to route observer so we can refresh when returning to this page
+    final modalRoute = ModalRoute.of(context);
+    if (modalRoute != null) {
+      routeObserver.subscribe(this, modalRoute);
+    }
+  }
+
+  Future<void> _loadHistory() async {
+    setState(() => _loading = true);
+    try {
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
+      final userId = userProvider.currentUser?.userId ?? 0;
+      debugPrint('HistoryPage._loadHistory: userId=$userId');
+      if (userId == 0) {
+        // not logged in, show empty
+        setState(() => _records = []);
+        return;
+      }
+      final url = '$apiBase/chat/history?user_id=$userId&limit=50';
+      debugPrint('HistoryPage requesting: $url');
+      final resp = await http.get(Uri.parse(url));
+      debugPrint('HistoryPage response status: ${resp.statusCode}');
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body);
+        final records = List<Map<String, dynamic>>.from(data['records'] ?? []);
+        debugPrint('HistoryPage received ${records.length} records');
+        setState(() {
+          _records = records;
+        });
+      } else {
+        debugPrint('HistoryPage non-200 response: ${resp.body}');
+      }
+    } catch (e) {
+      debugPrint('Load history failed: $e');
+    }
+    setState(() => _loading = false);
+  }
+
+  @override
+  void dispose() {
+    try {
+      routeObserver.unsubscribe(this);
+    } catch (_) {}
+    super.dispose();
+  }
+
+  @override
+  void didPopNext() {
+    // Called when returning to this route (e.g. user pressed back from chat)
+    debugPrint('HistoryPage.didPopNext - refreshing history');
+    _loadHistory();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -35,113 +95,52 @@ class HistoryPage extends StatelessWidget {
           onPressed: () => Navigator.pop(context),
         ),
         title: const Align(
-          alignment: Alignment.centerLeft, // 靠左
+          alignment: Alignment.centerLeft,
           child: Text(
-            "瀏覽歷史",
-            style: TextStyle(
-              color: Colors.white, // 白色文字
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-            ),
+            '瀏覽歷史',
+            style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600),
           ),
         ),
-        centerTitle: false, // 取消置中
+        centerTitle: false,
       ),
-      body: history.isEmpty
-          ? const Center(child: Text("目前沒有瀏覽紀錄"))
-          : ListView.builder(
-        itemCount: history.length,
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        itemBuilder: (context, index) {
-          final article = history[index];
-          return Container(
-            margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(8),
-              boxShadow: const [
-                BoxShadow(
-                  color: Colors.black12,
-                  blurRadius: 2,
-                  offset: Offset(0, 1),
-                ),
-              ],
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 左側綠線
-                Container(
-                  width: 4,
-                  height: 80,
-                  color: const Color(0xFF9EB79E),
-                ),
-                // 文章內容
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // 文章標題
-                        Text(
-                          article["title"] ?? "",
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 6),
-                        // 發布時間 + 查看詳情
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            Text(
-                              "發布時間：${article["date"] ?? ""}",
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: Color(0xFF1A3D7A), // 深藍色
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _records.isEmpty
+              ? const Center(child: Text('目前沒有瀏覽紀錄'))
+              : RefreshIndicator(
+                  onRefresh: _loadHistory,
+                  child: ListView.separated(
+                    padding: const EdgeInsets.all(8),
+                    itemCount: _records.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (context, index) {
+                      final item = _records[index];
+                      final query = (item['query'] ?? '').toString();
+                      final createdAt = item['created_at'] ?? '';
+                      final gemini = item['gemini_result'] ?? {};
+                      final short = query.length > 80 ? '${query.substring(0, 80)}...' : query;
+
+                      return ListTile(
+                        tileColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        title: Text(short, maxLines: 2, overflow: TextOverflow.ellipsis),
+                        subtitle: Text(createdAt, style: const TextStyle(fontSize: 12)),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ChatDetailPage(
+                                query: query,
+                                geminiResult: Map<String, dynamic>.from(gemini),
+                                createdAt: createdAt,
                               ),
                             ),
-                            const SizedBox(width: 8),
-                            TextButton(
-                              style: TextButton.styleFrom(
-                                padding: EdgeInsets.zero,
-                                minimumSize: const Size(0, 0),
-                                tapTargetSize:
-                                MaterialTapTargetSize.shrinkWrap,
-                              ),
-                              onPressed: () {
-                                // ✅ 跳轉到 ArticlePage
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => ArticleDetailPage(
-                                    ),
-                                  ),
-                                );
-                              },
-                              child: const Text(
-                                "查看詳情 >>",
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
+                          );
+                        },
+                      );
+                    },
                   ),
                 ),
-              ],
-            ),
-          );
-        },
-      ),
       backgroundColor: const Color(0xFFF5F5F5),
     );
   }

@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../services/api_service.dart';
+import 'dart:convert';
 
 class SettingsPage extends StatefulWidget {
   static const route = '/settings';
@@ -21,6 +24,9 @@ class _SettingsPageState extends State<SettingsPage> {
 
   // 紀錄是否已同意隱私政策
   bool hasAgreedPrivacyPolicy = false;
+
+  bool isLoading = true;
+  int? userId;
 
   // 顯示小視窗方法（新增勾選框功能）
   void _showInfoDialog(BuildContext context, String title, String content,
@@ -52,6 +58,8 @@ class _SettingsPageState extends State<SettingsPage> {
                             agreed = val ?? false;
                             if (agreed) {
                               hasAgreedPrivacyPolicy = true;
+                              // 同步到後端
+                              _updateSettings();
                               Navigator.pop(context); // 勾選後自動關閉
                             }
                           });
@@ -80,7 +88,69 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    _loadUserSettings();
+  }
+
+  Future<void> _loadUserSettings() async {
+    setState(() => isLoading = true);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      userId = prefs.getInt('user_id');
+      if (userId == null) {
+        setState(() => isLoading = false);
+        return;
+      }
+
+      final api = ApiService.getInstance();
+      final data = await api.getUserSettings(userId!);
+      if (data != null) {
+        setState(() {
+          newsSubscription = data['news_category_subscription'] ?? false;
+          expertAnalysisSubscription = data['expert_analysis_subscription'] ?? false;
+          reportSubscription = data['weekly_report_subscription'] ?? false;
+          forecastNotification = data['fake_news_alert'] ?? false;
+          hotTopicNotification = data['trending_topic_alert'] ?? false;
+          expertReplyNotification = data['expert_response_alert'] ?? false;
+          hasAgreedPrivacyPolicy = data['privacy_policy_agreed'] ?? false;
+        });
+      }
+    } catch (e) {
+      print('載入使用者設定失敗: $e');
+    } finally {
+      setState(() => isLoading = false);
+    }
+  }
+
+  Future<void> _updateSettings() async {
+    if (userId == null) return;
+    final api = ApiService.getInstance();
+    final body = {
+      'news_category_subscription': newsSubscription,
+      'expert_analysis_subscription': expertAnalysisSubscription,
+      'weekly_report_subscription': reportSubscription,
+      'fake_news_alert': forecastNotification,
+      'trending_topic_alert': hotTopicNotification,
+      'expert_response_alert': expertReplyNotification,
+      'privacy_policy_agreed': hasAgreedPrivacyPolicy,
+    };
+    try {
+      final ok = await api.updateUserSettings(userId!, body);
+      if (!ok) {
+        print('更新設定失敗');
+      }
+    } catch (e) {
+      print('更新設定時發生錯誤: $e');
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (isLoading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text("設定與通知"),
@@ -113,6 +183,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   value: newsSubscription,
                   onChanged: (val) {
                     setState(() => newsSubscription = val);
+                    _updateSettings();
                   },
                 ),
                 SwitchListTile(
@@ -120,6 +191,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   value: expertAnalysisSubscription,
                   onChanged: (val) {
                     setState(() => expertAnalysisSubscription = val);
+                    _updateSettings();
                   },
                 ),
                 SwitchListTile(
@@ -127,6 +199,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   value: reportSubscription,
                   onChanged: (val) {
                     setState(() => reportSubscription = val);
+                    _updateSettings();
                   },
                 ),
               ],
@@ -151,6 +224,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   value: forecastNotification,
                   onChanged: (val) {
                     setState(() => forecastNotification = val);
+                    _updateSettings();
                   },
                 ),
                 SwitchListTile(
@@ -158,6 +232,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   value: hotTopicNotification,
                   onChanged: (val) {
                     setState(() => hotTopicNotification = val);
+                    _updateSettings();
                   },
                 ),
                 SwitchListTile(
@@ -165,6 +240,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   value: expertReplyNotification,
                   onChanged: (val) {
                     setState(() => expertReplyNotification = val);
+                    _updateSettings();
                   },
                 ),
               ],

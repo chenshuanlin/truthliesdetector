@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:provider/provider.dart';
+import '../providers/user_provider.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:truthliesdetector/themes/app_colors.dart';
@@ -91,44 +94,36 @@ class _AIchatState extends State<AIchat> {
       base64Image = base64Encode(imageBytes);
     }
     
-    final apiKey = ''; // 在執行環境中會自動提供
-    final apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=$apiKey';
+  // Choose API base depending on platform:
+  // - web (Chrome) can use 127.0.0.1
+  // - Android emulator should use 10.0.2.2 to reach host machine
+  final apiBase = kIsWeb ? 'http://127.0.0.1:5000' : 'http://10.0.2.2:5000';
+  final apiUrl = '$apiBase/chat';
 
-    // 構建 API 請求的內容
-    final List<Map<String, dynamic>> parts = [
-      {'text': message},
-    ];
-    if (base64Image != null) {
-      parts.add({
-        'inlineData': {
-          'mimeType': 'image/png', // 假設圖片格式為 png
-          'data': base64Image,
-        }
-      });
+    // include logged-in user's id when available so backend can set correct FK
+    int? userId;
+    try {
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
+      userId = userProvider.currentUser?.userId;
+    } catch (e) {
+      userId = null;
     }
 
-    final payload = {
-      'contents': [
-        {
-          'role': 'user',
-          'parts': parts,
-        }
-      ],
-      'tools': [
-        {'google_search': {}}
-      ],
-    };
+    final Map<String, dynamic> body = {'message': message, 'user_id': userId};
+    if (base64Image != null) body['ai_acc_result'] = {'vision_result': {'imageBase64': base64Image}};
 
     try {
       final response = await http.post(
         Uri.parse(apiUrl),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(payload),
+        body: jsonEncode(body),
       );
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        final String aiReply = data['candidates'][0]['content']['parts'][0]['text'] ?? '抱歉，我無法理解您的意思。';
+        final String aiReply = (data['gemini_result'] != null && data['gemini_result']['reply'] != null)
+            ? data['gemini_result']['reply']
+            : (data['gemini_result'] != null && data['gemini_result']['reply'] == null ? data['gemini_result'].toString() : '抱歉，我無法理解您的意思。');
         setState(() {
           _messages.add(Message(
             text: aiReply,

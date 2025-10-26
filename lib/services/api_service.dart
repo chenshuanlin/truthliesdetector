@@ -126,6 +126,40 @@ class ApiService {
     }
   }
 
+  // 取得使用者設定
+  // (settings methods implemented later in file)
+
+  /// 取得/更新使用者設定（設定與通知）
+  Future<Map<String, dynamic>?> getUserSettings(int userId) async {
+    final url = Uri.parse('$baseUrl/api/settings/$userId');
+    try {
+      final resp = await http.get(url);
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        return data;
+      }
+      return null;
+    } catch (e) {
+      print('getUserSettings error: $e');
+      return null;
+    }
+  }
+
+  Future<bool> updateUserSettings(int userId, Map<String, dynamic> settings) async {
+    final url = Uri.parse('$baseUrl/api/settings/$userId');
+    try {
+      final resp = await http.put(url, headers: {'Content-Type': 'application/json'}, body: jsonEncode(settings));
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body);
+        return data['success'] == true;
+      }
+      return false;
+    } catch (e) {
+      print('updateUserSettings error: $e');
+      return false;
+    }
+  }
+
   Future<Map<String, dynamic>?> triggerScraper({String query = '減肥'}) async {
     final url = Uri.parse('$baseUrl/api/trigger-scraper');
     print('觸發爬蟲: $url, 查詢關鍵字: $query');

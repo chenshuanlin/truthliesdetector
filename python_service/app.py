@@ -5,16 +5,37 @@ from config import Config
 from models import db
 from routes_auth import bp as auth_bp
 from routes_stats import bp as stats_bp
+from routes.analyze_routes import analyze_bp
+from routes.chat_routes import chat_bp
+from routes.history_routes import bp as history_bp
 import base64, cv2, numpy as np, requests
 
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
+    # enable SQL echo for debugging SQL statements (temporary)
+    app.config['SQLALCHEMY_ECHO'] = True
     app.config['DEBUG'] = True
     CORS(app, supports_credentials=True)
     db.init_app(app)
     app.register_blueprint(auth_bp, url_prefix='/api')
     app.register_blueprint(stats_bp, url_prefix='/api')
+    # register integrated chat and analyze routes from colleague's feature
+    try:
+        from routes.chat_routes import chat_bp
+        from routes.analyze_routes import analyze_bp
+        app.register_blueprint(chat_bp, url_prefix='/')
+        app.register_blueprint(analyze_bp, url_prefix='/')
+    except Exception as e:
+        print(f'[routes] 無法註冊 chat/analyze 路由: {e}')
+    # register history blueprint under /api (chat/analyze already registered at root above)
+    app.register_blueprint(history_bp, url_prefix='/api')
+    # register settings routes (load/save user notification settings)
+    try:
+        from routes_settings import bp as settings_bp
+        app.register_blueprint(settings_bp, url_prefix='/api')
+    except Exception as e:
+        print(f'[routes] 無法註冊 settings 路由: {e}')
     
     # 啟用每日自動爬蟲
     # 暫時禁用定時爬蟲以穩定測試環境
@@ -105,4 +126,6 @@ if __name__ == '__main__':
     app = create_app()
     with app.app_context():
         db.create_all()
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    # Run without the reloader to avoid native-library subprocess issues on Windows
+    # (some native libs like MKL/Fortran can crash under the reloader)
+    app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False)
