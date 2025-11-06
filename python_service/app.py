@@ -5,6 +5,10 @@ from models import db
 from routes_auth import bp as auth_bp
 from routes_stats import bp as stats_bp
 from routes_settings import bp as settings_bp  # ✅ 新增：使用者設定 API
+from routes_favorites import bp as favorites_bp
+from routes_search_logs import bp as search_logs_bp
+from routes_articles import bp as articles_bp
+from routes_comments import bp as comments_bp
 import base64, cv2, numpy as np, requests
 
 
@@ -29,6 +33,12 @@ def create_app():
     app.register_blueprint(auth_bp, url_prefix='/api')
     app.register_blueprint(stats_bp, url_prefix='/api')
     app.register_blueprint(settings_bp, url_prefix='/api')  # ✅ 新增設定 API
+    app.register_blueprint(favorites_bp, url_prefix='/api')
+    app.register_blueprint(search_logs_bp, url_prefix='/api')
+    app.register_blueprint(articles_bp, url_prefix='/api')
+    app.register_blueprint(comments_bp, url_prefix="/api")
+
+
 
     # 註冊影像分析路由
     app = register_image_route(app)
@@ -112,6 +122,8 @@ def register_image_route(app):
         return jsonify({'ok': True, 'result': result})
 
     return app
+
+
 
 
 # ---------------------------------------------------------

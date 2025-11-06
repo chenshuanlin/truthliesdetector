@@ -95,7 +95,6 @@ class ApiService {
       print('API 回應內容: ${resp.body}');
       if (resp.statusCode == 200) {
         final data = jsonDecode(resp.body);
-        // 根據實際 API 回傳內容調整
         return data['ok'] == true ||
             data['success'] == true ||
             data['stats'] == true;
@@ -177,5 +176,71 @@ class ApiService {
       email: map['email'] as String,
       phone: map['phone'] as String?,
     );
+  }
+
+  // 🔥 熱門趨勢文章
+  Future<List<dynamic>> fetchTrendingArticles() async {
+    final response = await http.get(Uri.parse('$baseUrl/api/trending'));
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    } else {
+      throw Exception('無法取得熱門趨勢資料');
+    }
+  }
+
+  // 🎯 為您推薦（推薦文章）
+  Future<List<dynamic>> fetchRecommendations() async {
+    final response = await http.get(Uri.parse('$baseUrl/api/recommended'));
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    } else {
+      throw Exception('無法取得推薦資料');
+    }
+  }
+
+  // 🏆 排行榜（依 reliability_score）
+  Future<List<dynamic>> fetchRanking() async {
+    final response = await http.get(Uri.parse('$baseUrl/api/ranking'));
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    } else {
+      throw Exception('無法取得排行榜資料');
+    }
+  }
+
+  // 📰 文章詳情（HomePage 點擊會用到）
+  Future<Map<String, dynamic>> fetchArticleDetail(int articleId) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/api/articles/$articleId'),
+    );
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    } else {
+      throw Exception('無法取得文章詳情');
+    }
+  }
+
+  // 💬 取得留言
+  Future<List<dynamic>> fetchComments(int articleId) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/api/articles/$articleId/comments'),
+    );
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    } else {
+      throw Exception('無法取得留言');
+    }
+  }
+
+  // ✏️ 發送留言
+  Future<void> postComment(int articleId, String author, String content) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/articles/$articleId/comments'),
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode({'author': author, 'content': content}),
+    );
+    if (response.statusCode != 201) {
+      throw Exception('留言發送失敗');
+    }
   }
 }
