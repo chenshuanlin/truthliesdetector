@@ -133,7 +133,7 @@ class _CollectPageState extends State<CollectPage> {
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (context) => ArticleDetailPage(
+                                    builder: (context) => ArticleDetailPage(articleId: 2
                                     ),
                                   ),
                                 );
