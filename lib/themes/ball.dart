@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:truthliesdetector/themes/app_colors.dart';
-import 'package:truthliesdetector/screens/AIchat.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:screenshot/screenshot.dart';
-import 'dart:typed_data';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
+import 'package:truthliesdetector/themes/app_colors.dart';
+import 'package:truthliesdetector/screens/AIchat.dart';
 
 /// 全域懸浮球元件，可在 App 內外使用。
 class FloatingActionMenu extends StatefulWidget {
@@ -35,6 +37,10 @@ class _FloatingActionMenuState extends State<FloatingActionMenu>
   final double _spacing = 60.0;
   final double _bottomNavBarEstimatedHeight = 80.0;
 
+  // Flask API base
+  final String apiBase =
+      const String.fromEnvironment('API_BASE', defaultValue: 'http://127.0.0.1:5000');
+
   @override
   void initState() {
     super.initState();
@@ -46,7 +52,6 @@ class _FloatingActionMenuState extends State<FloatingActionMenu>
       CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
     );
 
-    // 預設右下角位置
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _offset = Offset(
         MediaQuery.of(context).size.width - _fabSize - 16.0,
@@ -80,7 +85,91 @@ class _FloatingActionMenuState extends State<FloatingActionMenu>
   }
 
   // --------------------------------------------------
-  // 截圖/選圖片 → AIchat
+  // 呼叫 Flask /analyze
+  // --------------------------------------------------
+  Future<void> _sendToFlask(String query, {Uint8List? imageBytes}) async {
+    try {
+      final uri = Uri.parse('$apiBase/analyze');
+      final request = http.MultipartRequest('POST', uri);
+      request.fields['text'] = query;
+
+      if (imageBytes != null) {
+        request.files.add(http.MultipartFile.fromBytes(
+          'image',
+          imageBytes,
+          filename: 'upload.jpg',
+        ));
+      }
+
+      // 顯示分析中提示
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('🧠 正在進行分析中...'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+
+      final response = await request.send();
+      final resBody = await response.stream.bytesToString();
+
+      if (response.statusCode == 200) {
+        final result = jsonDecode(resBody);
+        final credibility = result['credibility'] ?? '未知';
+        final summary = result['summary'] ?? '無摘要';
+
+        // 傳回給 AIchat
+        FlutterOverlayWindow.shareData(jsonEncode({
+          'type': 'result',
+          'credibility': credibility,
+          'summary': summary,
+        }));
+
+        // 顯示提示
+        if (mounted && context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('✅ 分析完成：可信度 $credibility'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } else {
+        FlutterOverlayWindow.shareData(jsonEncode({
+          'type': 'error',
+          'message': '伺服器回應錯誤 (${response.statusCode})'
+        }));
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('❌ 分析失敗：伺服器錯誤 (${response.statusCode})'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      FlutterOverlayWindow.shareData(jsonEncode({
+        'type': 'error',
+        'message': '分析失敗：$e',
+      }));
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('⚠️ 無法連線到後端：$e'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    }
+  }
+
+  // --------------------------------------------------
+  // 截圖或選圖片 → 分析 or 開啟 AIchat
   // --------------------------------------------------
   Future<void> _recognizeImage() async {
     _toggleMenu();
@@ -96,24 +185,32 @@ class _FloatingActionMenuState extends State<FloatingActionMenu>
       }
 
       if (imageBytes != null) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => AIchat(
-              initialQuery: '請幫我辨識這張圖片。',
-              capturedImageBytes: imageBytes,
+        await _sendToFlask('請幫我辨識這張圖片。', imageBytes: imageBytes);
+
+        if (context.mounted) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => AIchat(
+                initialQuery: '請幫我辨識這張圖片。',
+                capturedImageBytes: imageBytes,
+              ),
             ),
-          ),
-        );
+          );
+        }
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('未選擇圖片')),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('未選擇圖片')),
+          );
+        }
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('圖片辨識失敗：$e')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('圖片辨識失敗：$e')),
+        );
+      }
     }
   }
 
@@ -130,7 +227,9 @@ class _FloatingActionMenuState extends State<FloatingActionMenu>
           title: const Text('輸入網址進行查證'),
           content: TextField(
             controller: urlController,
-            decoration: const InputDecoration(hintText: '請輸入網址（http 或 https 開頭）'),
+            decoration: const InputDecoration(
+              hintText: '請輸入網址（http 或 https 開頭）',
+            ),
           ),
           actions: [
             TextButton(
@@ -139,18 +238,22 @@ class _FloatingActionMenuState extends State<FloatingActionMenu>
             ),
             ElevatedButton(
               child: const Text('查證'),
-              onPressed: () {
+              onPressed: () async {
                 final url = urlController.text.trim();
                 if (url.isNotEmpty) {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => AIchat(
-                        initialQuery: '請幫我分析這個網址的內容：$url',
-                      ),
-                    ),
-                  );
                   Navigator.of(dialogContext).pop();
+                  await _sendToFlask('請幫我分析這個網址的內容：$url');
+
+                  if (context.mounted) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => AIchat(
+                          initialQuery: '請幫我分析這個網址的內容：$url',
+                        ),
+                      ),
+                    );
+                  }
                 }
               },
             ),
@@ -168,8 +271,7 @@ class _FloatingActionMenuState extends State<FloatingActionMenu>
     if (widget.onTap != null) {
       widget.onTap!(0);
     } else {
-      // 若在懸浮模式中
-      if (!await FlutterOverlayWindow.isActive()) {
+      if (await FlutterOverlayWindow.isActive()) {
         await FlutterOverlayWindow.closeOverlay();
       }
     }
@@ -183,13 +285,14 @@ class _FloatingActionMenuState extends State<FloatingActionMenu>
       await FlutterOverlayWindow.requestPermission();
     }
     await FlutterOverlayWindow.showOverlay(
-      height: 100,
-      width: 100,
+      height: 120,
+      width: 120,
       alignment: OverlayAlignment.centerRight,
       enableDrag: true,
       overlayTitle: "TruthLiesDetector",
       overlayContent: "AI懸浮球已啟動",
       flag: OverlayFlag.defaultFlag,
+      // Removed invalid parameter 'overlayEntryPoint'
     );
   }
 

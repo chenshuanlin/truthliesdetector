@@ -8,7 +8,7 @@ environment:
   sdk: ^3.9.0
 
 dependencies:
-  flutter_overlay_window: ^0.4.3
+  flutter_overlay_window: ^0.5.0
   cupertino_icons: ^1.0.8
 
   # 檔案選擇 (支援 Web, Android, iOS, Desktop)
@@ -19,6 +19,10 @@ dependencies:
 
   # 截圖 (支援 Flutter 3.x)
   screenshot: ^3.0.0
+
+  # 狀態管理與日期格式化（新增）
+  provider: ^6.1.2
+  intl: ^0.19.0
 
 dev_dependencies:
   flutter_test:

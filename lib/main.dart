@@ -1,6 +1,8 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:screenshot/screenshot.dart';
+import 'package:flutter/foundation.dart' show kIsWeb; // ✅ 平台判斷
+import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 
 // 📂 Screens
 import 'package:truthliesdetector/screens/AIacc.dart';
@@ -15,8 +17,31 @@ import 'package:truthliesdetector/themes/app_colors.dart';
 import 'package:truthliesdetector/themes/app_drawer.dart';
 import 'package:truthliesdetector/themes/ball.dart';
 
+// =========================================================
+// 🧠 App 入口點
+// =========================================================
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
+}
+
+// =========================================================
+// 🌍 系統懸浮球入口 (僅 Android 有效)
+// =========================================================
+@pragma('vm:entry-point')
+void overlayMain() {
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(
+    MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: SafeArea(
+          child: FloatingActionMenu(),
+        ),
+      ),
+    ),
+  );
 }
 
 // =========================================================
@@ -36,13 +61,11 @@ class MyApp extends StatelessWidget {
         fontFamily: 'NotoSansSC',
         useMaterial3: true,
       ),
-      // ✅ 首頁預設為登入頁
       initialRoute: LoginPage.route,
       routes: {
         LoginPage.route: (_) => const LoginPage(),
         MainLayout.route: (_) => const MainLayout(),
       },
-      // ✅ AIacc → AIchat 導航帶參數
       onGenerateRoute: (settings) {
         if (settings.name == AIchat.route) {
           final args = (settings.arguments ?? {}) as Map<String, dynamic>;
@@ -79,13 +102,63 @@ class _MainLayoutState extends State<MainLayout> {
 
   late final List<Widget> _pages = [
     const HomePage(),
-    // 🔹 第二頁：真假小助手（AIacc）
     const AIaccScreen(),
     const SearchPage(),
     const ProfilePage(),
   ];
 
   void _onItemTapped(int index) => setState(() => _currentIndex = index);
+
+  // --------------------------------------------------------
+  // 🟢 啟動全域懸浮球（Web 不執行）
+  // --------------------------------------------------------
+  Future<void> _startGlobalFloatingBall() async {
+    if (kIsWeb) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('🌐 Web 模式無法顯示懸浮球，只顯示模擬介面')),
+      );
+      return;
+    }
+
+    if (!await FlutterOverlayWindow.isPermissionGranted()) {
+      await FlutterOverlayWindow.requestPermission();
+    }
+
+    // ✅ 新版 API（不再支援 overlayEntryPoint）
+    await FlutterOverlayWindow.showOverlay(
+      enableDrag: true,
+      overlayTitle: "TruthLiesDetector",
+      overlayContent: "AI懸浮球啟動中...",
+      height: 120,
+      width: 120,
+      alignment: OverlayAlignment.centerRight,
+      flag: OverlayFlag.defaultFlag,
+      visibility: NotificationVisibility.visibilityPrivate,
+    );
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("✅ 懸浮球已啟動")),
+    );
+  }
+
+  // --------------------------------------------------------
+  // 🔴 關閉懸浮球（Web 不執行）
+  // --------------------------------------------------------
+  Future<void> _stopGlobalFloatingBall() async {
+    if (kIsWeb) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('🌐 Web 模式不支援關閉懸浮球')),
+      );
+      return;
+    }
+
+    if (await FlutterOverlayWindow.isActive()) {
+      await FlutterOverlayWindow.closeOverlay();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("🛑 懸浮球已關閉")),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -96,12 +169,14 @@ class _MainLayoutState extends State<MainLayout> {
         foregroundColor: Colors.white,
         actions: [
           IconButton(
-            icon: const Icon(Icons.settings),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("⚙️ 設定功能開發中...")),
-              );
-            },
+            icon: const Icon(Icons.bubble_chart),
+            tooltip: "啟動懸浮球",
+            onPressed: _startGlobalFloatingBall,
+          ),
+          IconButton(
+            icon: const Icon(Icons.close),
+            tooltip: "關閉懸浮球",
+            onPressed: _stopGlobalFloatingBall,
           ),
         ],
       ),
@@ -188,7 +263,6 @@ class CustomBottomNavBar extends StatelessWidget {
               _buildItem(Icons.person, "我的", 3),
             ],
           ),
-          // 🔹 中央 Logo 按鈕（快捷進入真假小助手）
           Positioned(
             top: -25,
             left: MediaQuery.of(context).size.width / 2 - 45,

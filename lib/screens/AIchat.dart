@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:typed_data';
+import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:truthliesdetector/themes/app_colors.dart';
 
 /// 訊息結構
@@ -23,7 +24,7 @@ class AIchat extends StatefulWidget {
   final String? initialQuery;
   final Uint8List? capturedImageBytes;
   final Map<String, dynamic>? backendResult;
-  final int? userId; // 🧩 綁定使用者ID
+  final int? userId;
 
   static const String route = '/aichat';
 
@@ -44,8 +45,8 @@ class _AIchatState extends State<AIchat> {
   final ScrollController _scrollController = ScrollController();
   final List<Message> _messages = [];
 
-  String? lastGeminiSummary;
   bool _isLoadingHistory = false;
+  String? lastGeminiSummary;
 
   final String apiBase =
       const String.fromEnvironment('API_BASE', defaultValue: 'http://127.0.0.1:5000');
@@ -53,12 +54,39 @@ class _AIchatState extends State<AIchat> {
   @override
   void initState() {
     super.initState();
-    // 若有新的分析結果則開新對話，否則載入舊歷史
+    _setupOverlayListener();
+
+    // 若有新的分析結果則開新對話，否則載入舊紀錄
     if (widget.backendResult != null) {
       _initializeChat();
     } else {
       _loadChatHistoryFromServer();
     }
+  }
+
+  // ============================================================
+  // 🪄 監聽懸浮球傳來的資料
+  // ============================================================
+  void _setupOverlayListener() {
+    FlutterOverlayWindow.overlayListener.listen((event) {
+      try {
+        final data = jsonDecode(event);
+        if (data['type'] == 'result') {
+          final credibility = data['credibility'] ?? '未知';
+          final summary = data['summary'] ?? '無摘要';
+          setState(() {
+            _messages.add(Message(
+              text: "🟢 懸浮球查證結果\n可信度：$credibility\n$summary",
+              sender: 'ai',
+              timestamp: DateTime.now(),
+            ));
+          });
+          _scrollToBottom();
+        }
+      } catch (e) {
+        debugPrint("⚠️ 懸浮球資料解析失敗: $e");
+      }
+    });
   }
 
   // ============================================================
@@ -137,7 +165,7 @@ class _AIchatState extends State<AIchat> {
   }
 
   // ============================================================
-  // 🧩 整理 AI 回覆訊息（支援新版結構）
+  // 🧩 整理 AI 回覆訊息
   // ============================================================
   String _formatAIMessage(Map<String, dynamic> result) {
     if (result.containsKey('gemini_result')) {
@@ -145,7 +173,6 @@ class _AIchatState extends State<AIchat> {
       final reply = gemini['reply'] ?? '';
       final comment = gemini['comment'] ?? '';
       final mode = gemini['mode'] ?? '文字';
-      final intent = gemini['intent'] ?? 'verification';
       final scores = gemini['scores'] ?? {};
 
       final combined = scores['combined'] ?? {};
@@ -154,32 +181,19 @@ class _AIchatState extends State<AIchat> {
 
       final combinedScore = combined['score']?.toString() ?? '—';
       final combinedLevel = combined['level'] ?? '未知';
-      final textScore = text['score']?.toString() ?? '—';
       final textLevel = text['level'] ?? '未知';
-      final visionScore = vision['score']?.toString() ?? '—';
       final visionLevel = vision['level'] ?? '未知';
 
-      // 查詢型 → 不顯示可信度
-      if (intent == "inquiry") {
-        return '''
-🧠 Gemini 模式：查詢
-$reply
-$comment
-''';
-      }
-
-      // 查證型 → 顯示三層可信度
       return '''
-🧠 Gemini 分析模式：$mode（查證）
+🧠 Gemini 分析模式：$mode
 📊 綜合可信度：$combinedLevel（$combinedScore）
-📝 文字可信度：$textLevel（$textScore）
-📷 圖片可信度：$visionLevel（$visionScore）
+📝 文字可信度：$textLevel
+📷 圖片可信度：$visionLevel
 
 $reply
 $comment
 ''';
     } else {
-      // 舊格式相容（防止後端未更新）
       final credibility = result['credibility_level'] ?? result['level'] ?? '未知';
       final score = result['score']?.toString() ?? '—';
       final summary = result['summary'] ?? result['reason'] ?? '無摘要';

@@ -1,5 +1,5 @@
 # =====================================================================
-# app.py - TruthLiesDetector Flask 主啟動程式（強化防呆 + 回傳精簡版）
+# app.py - TruthLiesDetector Flask 主啟動程式（整合 Flutter + Gemini + 模型分析）
 # =====================================================================
 
 import sys
@@ -34,7 +34,7 @@ else:
 # II. 初始化 Flask App
 # ================================================================
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/*": {"origins": "*"}})  # ✅ 全域允許跨域（Flutter / Android / Web）
 
 logging.basicConfig(
     level=logging.INFO,
@@ -61,23 +61,26 @@ except Exception as e:
     logging.error(f"❌ 無法載入路由模組：{e}", exc_info=True)
 
 # ================================================================
-# IV. 根路由（狀態檢查）
+# IV. 健康檢查根路由
 # ================================================================
 @app.route("/")
 def index():
     """
-    基本狀態檢查：確認模型、金鑰與系統狀態
+    基本狀態檢查：確認模型、Gemini、資料庫等狀態。
     """
     model_path = os.path.join(MODEL_DIR, "auth_level_lgbm.txt")
+    gemini_key = os.getenv("GEMINI_API_KEY", "")
+    db_ready = os.path.exists(os.path.join(BASE_DIR, "truthlies.db"))
 
     return jsonify({
-        "api": "ready",
+        "api": "TruthLiesDetector",
         "status": "ok",
         "model_dir": MODEL_DIR,
         "model_loaded": os.path.exists(model_path),
-        "gemini_key_loaded": bool(os.getenv("GEMINI_API_KEY")),
-        "description": "✅ Flask 後端正常運行，AI 分析與 Gemini 模組已整合。"
-    })
+        "gemini_key_loaded": bool(gemini_key),
+        "database_ready": db_ready,
+        "description": "✅ Flask 後端運作正常，AI 模型與 Gemini 模組已整合。",
+    }), 200
 
 # ================================================================
 # V. 聊天紀錄查詢端點（前端用）
@@ -85,12 +88,11 @@ def index():
 @app.route("/chat/history", methods=["GET"])
 def chat_history():
     """
-    提供前端查詢歷史聊天紀錄
-    使用方式：GET /chat/history?limit=100
+    提供前端查詢歷史聊天紀錄：
+    GET /chat/history?limit=50
     """
     try:
         limit = int(request.args.get("limit", 50))
-        from core.database import get_chat_history
         history = get_chat_history(limit=limit)
         return jsonify({
             "status": "ok",
@@ -105,27 +107,30 @@ def chat_history():
         }), 500
 
 # ================================================================
-# VI. AI 簡潔回傳測試端點（可用於前端整合驗證）
+# VI. AI 簡潔回傳測試端點（快速測試用）
 # ================================================================
 @app.route("/analyze/summary", methods=["POST"])
 def analyze_summary():
     """
-    測試版：回傳簡潔化的 AI 分析結果
-    （若前端不需詳細文字，使用這個端點）
+    測試版：回傳簡潔化的 AI 分析結果（無 Gemini）
+    讓 Flutter 前端可快速測試連線。
     """
     try:
         data = request.get_json(force=True)
         text = data.get("text", "")
 
-        # 模擬 AI 模型分析結果（未使用 Gemini，僅示範格式）
+        if not text.strip():
+            return jsonify({"error": "請提供文字內容"}), 400
+
+        # 模擬分析結果
         result = {
-            "credibility_level": "中",
+            "credibility": "中",
             "score": 0.4871,
-            "reason": "部分內容真實，但來源與佐證不足，可信度中等。",
-            "suggestion": "請查證其他可信來源或新聞媒體。",
+            "summary": "部分內容真實，但來源與佐證不足，可信度中等。",
+            "suggestion": "請查證其他可信來源或新聞媒體。"
         }
 
-        logging.info(f"✅ 分析完成：text={text[:30]}... score={result['score']}")
+        logging.info(f"✅ /analyze/summary 分析完成：{text[:20]}... 分數={result['score']}")
         return jsonify(result), 200
 
     except Exception as e:
@@ -136,22 +141,47 @@ def analyze_summary():
         }), 500
 
 # ================================================================
-# VII. 啟動主程式
+# VII. Flutter 連線測試端點
+# ================================================================
+@app.route("/test/connection", methods=["GET"])
+def test_connection():
+    """
+    Flutter 用於驗證與 Flask 是否可正常通訊。
+    """
+    return jsonify({
+        "status": "connected",
+        "message": "🎉 Flask 後端連線成功，前端可正常呼叫 API。",
+    }), 200
+
+# ================================================================
+# VIII. 全域錯誤處理
+# ================================================================
+@app.errorhandler(404)
+def not_found_error(e):
+    return jsonify({"error": "找不到指定的路由"}), 404
+
+@app.errorhandler(500)
+def internal_error(e):
+    logging.error(f"❌ 伺服器錯誤：{e}", exc_info=True)
+    return jsonify({"error": "伺服器內部錯誤", "details": str(e)}), 500
+
+# ================================================================
+# IX. 主程式啟動
 # ================================================================
 if __name__ == "__main__":
     logging.info("🚀 TruthLiesDetector Flask API 啟動中...")
 
     try:
         from core.database import init_db, cleanup_old_chat_history
-        init_db()  # 自動建立資料表
-        cleanup_old_chat_history(30)  # 清理 30 天前紀錄
+        init_db()  # ✅ 自動建立資料表
+        cleanup_old_chat_history(30)  # ✅ 清理 30 天前紀錄
         logging.info("✅ 資料庫初始化與清理完成。")
     except Exception as e:
         logging.error(f"⚠️ 初始化資料庫時發生錯誤：{e}", exc_info=True)
 
     # 啟動 Flask 主伺服器
     try:
-        app.run(host="0.0.0.0", port=5000, debug=True)
+        app.run(host="0.0.0.0", port=5000, debug=False)
     except OSError as e:
         logging.error(f"❌ Flask 埠號被占用或啟動失敗：{e}")
         print("請確認是否已有相同服務在執行（如舊版 Flask 仍在背景運行）。")
