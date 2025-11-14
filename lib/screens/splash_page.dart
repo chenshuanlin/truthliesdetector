@@ -1,8 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:truthliesdetector/providers/user_provider.dart';
 
 // 📌 螢幕頁面
 import 'package:truthliesdetector/screens/login_page.dart';
+import 'package:truthliesdetector/main.dart';
 import 'package:truthliesdetector/themes/app_colors.dart';
 
 class SplashPage extends StatefulWidget {
@@ -35,10 +38,28 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
     // 啟動動畫並使其重複播放，同時反向播放以創建來回效果
     _controller.repeat(reverse: true);
 
-    // 設定定時器，3秒後導航到登入頁面
-    Timer(const Duration(seconds: 3), () {
-      Navigator.of(context).pushReplacementNamed(LoginPage.route);
-    });
+    // 初始化用戶狀態並決定導航目標
+    _initializeAndNavigate();
+  }
+
+  Future<void> _initializeAndNavigate() async {
+    // 等待至少 3 秒以顯示啟動畫面
+    await Future.delayed(const Duration(seconds: 3));
+    
+    if (mounted) {
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
+      
+      // 初始化用戶狀態
+      await userProvider.initializeUser();
+      
+      if (userProvider.isLoggedIn) {
+        // 如果已登入，直接進入主頁面
+        Navigator.of(context).pushReplacementNamed(MainLayout.route);
+      } else {
+        // 如果未登入，進入登入頁面
+        Navigator.of(context).pushReplacementNamed(LoginPage.route);
+      }
+    }
   }
 
   @override

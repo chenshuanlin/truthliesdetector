@@ -11,7 +11,7 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
-  late TabController _tabController;
+  TabController? _tabController; // ✅ 改成可為 null
 
   final Color mainGreen = const Color(0xFF8BA88E);
   final Color bgGrey = const Color(0xFFF5F5F5);
@@ -25,19 +25,22 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
-    _fetchData();
+    _fetchData(); // ✅ 不先初始化 TabController，等資料來了再建立
   }
 
   Future<void> _fetchData() async {
     try {
-      final trending = await ApiService.fetchTrendingArticles();
-      final recommend = await ApiService.fetchRecommendations();
-      final ranking = await ApiService.fetchRanking();
+      final api = ApiService.getInstance();
+      final trending = await api.fetchTrendingArticles();
+      final recommend = await api.fetchRecommendations();
+      final ranking = await api.fetchRanking();
 
       // 排行榜依 reliability_score 降冪
-      ranking.sort((a, b) =>
-          (b['reliability_score'] ?? 0).compareTo(a['reliability_score'] ?? 0));
+      ranking.sort(
+        (a, b) => (b['reliability_score'] ?? 0).compareTo(
+          a['reliability_score'] ?? 0,
+        ),
+      );
 
       // 依 category 分組推薦文章
       Map<String, List<dynamic>> grouped = {};
@@ -45,6 +48,13 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         String cat = article['category'] ?? '其他';
         grouped.putIfAbsent(cat, () => []).add(article);
       }
+
+      // ✅ 根據實際類別數量建立 TabController
+      _tabController?.dispose();
+      _tabController = TabController(
+        length: grouped.keys.isNotEmpty ? grouped.keys.length : 1,
+        vsync: this,
+      );
 
       setState(() {
         trendingArticles = trending;
@@ -62,7 +72,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
   @override
   void dispose() {
-    _tabController.dispose();
+    _tabController?.dispose();
     super.dispose();
   }
 
@@ -77,19 +87,26 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       children: [
         _buildSearchBar(),
         const SizedBox(height: 24),
-        const Text("熱門趨勢",
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+        const Text(
+          "熱門趨勢",
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        ),
         const SizedBox(height: 12),
         trendingArticles.isNotEmpty
             ? _buildTrendingCard(trendingArticles[0])
             : const Text("目前沒有熱門文章"),
 
         const SizedBox(height: 24),
-        const Text("為您推薦",
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+        const Text(
+          "為您推薦",
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        ),
         const SizedBox(height: 12),
 
-        if (categorizedRecommendations.isNotEmpty)
+        if (categorizedRecommendations.isNotEmpty &&
+            _tabController != null &&
+            _tabController!.length ==
+                categorizedRecommendations.keys.length) // ✅ 避免長度不符錯誤
           Column(
             children: [
               TabBar(
@@ -98,10 +115,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 labelColor: mainGreen,
                 unselectedLabelColor: Colors.grey,
                 indicatorColor: Colors.transparent,
-                labelStyle:
-                    const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                labelStyle: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
                 tabs: categorizedRecommendations.keys
-                    .take(3)
                     .map((cat) => Tab(text: cat))
                     .toList(),
               ),
@@ -111,9 +129,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 child: TabBarView(
                   controller: _tabController,
                   children: categorizedRecommendations.keys
-                      .take(3)
-                      .map((cat) =>
-                          _buildRecommendList(categorizedRecommendations[cat]!))
+                      .map(
+                        (cat) => _buildRecommendList(
+                          categorizedRecommendations[cat] ?? [],
+                        ),
+                      )
                       .toList(),
                 ),
               ),
@@ -126,12 +146,14 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text("今日排行榜",
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            const Text(
+              "今日排行榜",
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
             TextButton(
               onPressed: () {},
               child: Text("更多", style: TextStyle(color: mainGreen)),
-            )
+            ),
           ],
         ),
         const SizedBox(height: 12),
@@ -172,8 +194,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           children: [
             Icon(Icons.search, color: Colors.grey),
             SizedBox(width: 8),
-            Text("搜尋文章、標籤或主題",
-                style: TextStyle(color: Colors.grey, fontSize: 14)),
+            Text(
+              "搜尋文章、標籤或主題",
+              style: TextStyle(color: Colors.grey, fontSize: 14),
+            ),
           ],
         ),
       ),
@@ -190,8 +214,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) =>
-                  ArticleDetailPage(articleId: article['id'] ?? 0),
+              builder: (_) => ArticleDetailPage(articleId: article['id'] ?? 0),
             ),
           );
         },
@@ -200,12 +223,18 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(article['title'] ?? '未命名文章',
-                  style: const TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.bold)),
+              Text(
+                article['title'] ?? '未命名文章',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
               const SizedBox(height: 8),
-              Text(article['summary'] ?? '暫無摘要內容',
-                  style: const TextStyle(color: Colors.black54, fontSize: 14)),
+              Text(
+                article['summary'] ?? '暫無摘要內容',
+                style: const TextStyle(color: Colors.black54, fontSize: 14),
+              ),
             ],
           ),
         ),
@@ -225,8 +254,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) =>
-                    ArticleDetailPage(articleId: a['id'] ?? 0),
+                builder: (_) => ArticleDetailPage(articleId: a['id'] ?? 0),
               ),
             );
           },
@@ -247,14 +275,20 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(a['title'] ?? '未命名文章',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        fontSize: 15, fontWeight: FontWeight.bold)),
+                Text(
+                  a['title'] ?? '未命名文章',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
                 const Spacer(),
-                Text("可信度分數：${a['reliability_score'] ?? 'N/A'}",
-                    style: const TextStyle(color: Colors.grey)),
+                Text(
+                  "可信度分數：${a['reliability_score'] ?? 'N/A'}",
+                  style: const TextStyle(color: Colors.grey),
+                ),
               ],
             ),
           ),
@@ -264,7 +298,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   }
 
   Widget _buildRankItem(
-      String title, String subtitle, Color color, int? articleId) {
+    String title,
+    String subtitle,
+    Color color,
+    int? articleId,
+  ) {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 1,
@@ -274,19 +312,22 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) =>
-                  ArticleDetailPage(articleId: articleId ?? 0),
+              builder: (_) => ArticleDetailPage(articleId: articleId ?? 0),
             ),
           );
         },
         leading: Container(
           width: 14,
           height: 14,
-          decoration:
-              BoxDecoration(color: color, borderRadius: BorderRadius.circular(7)),
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(7),
+          ),
         ),
-        title: Text(title,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+        title: Text(
+          title,
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+        ),
         subtitle: Text(subtitle, style: const TextStyle(color: Colors.black54)),
         trailing: const Icon(Icons.arrow_forward_ios, size: 16),
       ),

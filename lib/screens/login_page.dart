@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:truthliesdetector/providers/user_provider.dart';
 // 我們需要引用 main.dart 來取得 MainLayout 的路由
 import 'package:truthliesdetector/main.dart'; 
 import 'package:truthliesdetector/screens/register_page.dart';
@@ -43,10 +45,55 @@ class _LoginPageState extends State<LoginPage> {
         ),
       );
 
-  void _login() {
+  void _login() async {
     if (_formKey.currentState!.validate()) {
-      // ✅ 通過檢查 → 修正：跳轉到包含底部導覽列的 MainLayout
-      Navigator.pushReplacementNamed(context, MainLayout.route);
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
+      
+      // 顯示載入指示器
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+
+      try {
+        final success = await userProvider.login(_account.text, _password.text);
+        
+        // 關閉載入指示器
+        if (mounted) Navigator.of(context).pop();
+
+        if (success) {
+          // 登入成功，跳轉到主頁面
+          if (mounted) {
+            Navigator.pushReplacementNamed(context, MainLayout.route);
+          }
+        } else {
+          // 登入失敗，顯示錯誤訊息
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('帳號或密碼錯誤'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        }
+      } catch (e) {
+        // 關閉載入指示器
+        if (mounted) Navigator.of(context).pop();
+        
+        // 顯示錯誤訊息
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('登入失敗：$e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
     }
   }
 

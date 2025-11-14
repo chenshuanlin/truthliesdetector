@@ -23,6 +23,18 @@ dependencies:
   # 截圖 (支援 Flutter 3.x)
   screenshot: ^3.0.0
 
+  # 資料庫連線 (PostgreSQL)
+  postgres: ^2.4.6
+
+  # 本地儲存 (用戶登入狀態)
+  shared_preferences: ^2.2.2
+
+  # 狀態管理
+  provider: ^6.1.1
+
+  # 密碼加密
+  crypto: ^3.0.3
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

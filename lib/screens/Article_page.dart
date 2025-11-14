@@ -1,12 +1,14 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:truthliesdetector/services/api_service.dart';
 import 'package:truthliesdetector/themes/app_colors.dart';
 import 'package:screenshot/screenshot.dart';
 import 'package:truthliesdetector/themes/ball.dart';
+import 'package:provider/provider.dart';
+import 'package:truthliesdetector/providers/user_provider.dart';
 
 class ArticleDetailPage extends StatefulWidget {
-  static const String route = '/article';
-
   final int articleId; // ← 接收從 HomePage 傳來的 articleId
 
   const ArticleDetailPage({super.key, required this.articleId});
@@ -21,19 +23,25 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
 
   Map<String, dynamic>? _articleData;
   bool _isLoading = true;
-  final List<Map<String, String>> _comments = [];
 
+  final List<Map<String, dynamic>> _comments = []; // ✅ 留言資料結構
   final TextEditingController _commentController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _fetchArticleData();
+    print("📰 開啟文章詳情頁，articleId = ${widget.articleId}");
+    _fetchArticleData(); // 抓文章內容
+    _fetchComments(); // ✅ 同時抓留言
   }
 
+  // ==============================
+  // 📰 抓取文章詳情
+  // ==============================
   Future<void> _fetchArticleData() async {
     try {
-      final data = await ApiService.fetchArticleDetail(widget.articleId);
+      final api = ApiService.getInstance();
+      final data = await api.fetchArticleDetail(widget.articleId);
       setState(() {
         _articleData = data;
         _isLoading = false;
@@ -46,15 +54,68 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
     }
   }
 
-  void _submitComment() {
-    if (_commentController.text.isNotEmpty) {
-      setState(() {
-        _comments.add({
-          'author': '匿名用戶',
-          'content': _commentController.text,
+  // ==============================
+  // 💬 取得留言 (GET /api/articles/:id/comments)
+  // ==============================
+  Future<void> _fetchComments() async {
+    try {
+      final api = ApiService.getInstance();
+      final baseUrl = api.baseUrl;
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/articles/${widget.articleId}/comments'),
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = json.decode(response.body);
+        setState(() {
+          _comments
+            ..clear()
+            ..addAll(data.map((e) => Map<String, dynamic>.from(e)));
         });
+      } else {
+        print('⚠️ 無法載入留言: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('❌ 載入留言錯誤: $e');
+    }
+  }
+
+  // ==============================
+  // ✏️ 新增留言 (POST /api/articles/:id/comments)
+  // ==============================
+  Future<void> _submitComment() async {
+    final content = _commentController.text.trim();
+    if (content.isEmpty) return;
+
+    try {
+      final api = ApiService.getInstance();
+      final baseUrl = api.baseUrl;
+
+      // ✅ 取得登入者資訊
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
+      final userId = userProvider.userId;
+      final username = userProvider.username ?? "匿名用戶";
+
+      // ✅ 傳送留言
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/articles/${widget.articleId}/comments'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          "author": username,
+          "user_id": userId, // ✅ 新增 userId
+          "content": content,
+        }),
+      );
+
+      if (response.statusCode == 201) {
+        print('✅ 留言新增成功');
         _commentController.clear();
-      });
+        await _fetchComments(); // 🔁 發送後刷新留言
+      } else {
+        print('⚠️ 留言失敗: ${response.body}');
+      }
+    } catch (e) {
+      print('❌ 發送留言錯誤: $e');
     }
   }
 
@@ -67,18 +128,15 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     if (_articleData == null) {
-      return const Scaffold(
-        body: Center(child: Text("找不到文章資料")),
-      );
+      return const Scaffold(body: Center(child: Text("找不到文章資料")));
     }
 
-    final double credibility = (_articleData!['reliability_score'] ?? 0.0).toDouble();
+    final double credibility = (_articleData!['reliability_score'] ?? 0.0)
+        .toDouble();
     final Color credibilityColor = credibility > 0.7
         ? AppColors.deepGreen
         : (credibility > 0.4 ? Colors.orange : AppColors.dangerRed);
@@ -92,8 +150,10 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
           icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text("文章詳情",
-            style: TextStyle(color: Colors.white, fontSize: 18)),
+        title: const Text(
+          "文章詳情",
+          style: TextStyle(color: Colors.white, fontSize: 18),
+        ),
         centerTitle: true,
         actions: [
           IconButton(
@@ -116,14 +176,18 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
                   Text(
                     _articleData!['title'] ?? '未命名文章',
                     style: const TextStyle(
-                        fontSize: 20, fontWeight: FontWeight.bold),
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Row(
                     children: [
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: credibilityColor.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(6),
@@ -132,15 +196,19 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
                           credibility > 0.7
                               ? "高可信度"
                               : (credibility > 0.4 ? "中等可信度" : "低可信度"),
-                          style:
-                              TextStyle(color: credibilityColor, fontSize: 12),
+                          style: TextStyle(
+                            color: credibilityColor,
+                            fontSize: 12,
+                          ),
                         ),
                       ),
                       const SizedBox(width: 8),
                       Text(
                         "發布時間：${_articleData!['published_time'] ?? '未知'}",
-                        style:
-                            const TextStyle(fontSize: 12, color: Colors.grey),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey,
+                        ),
                       ),
                     ],
                   ),
@@ -155,7 +223,7 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
                   ),
 
                   const SizedBox(height: 20),
-                  _buildCommentSection(),
+                  _buildCommentSection(), // ✅ 留言區
 
                   const SizedBox(height: 100),
                 ],
@@ -193,17 +261,22 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text("AI可信度分析",
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+            const Text(
+              "AI可信度分析",
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 8),
             Row(
               children: [
-                Text("可信度評分：${credibility.toStringAsFixed(2)}",
-                    style:
-                        const TextStyle(fontSize: 14, color: Colors.black87)),
+                Text(
+                  "可信度評分：${credibility.toStringAsFixed(2)}",
+                  style: const TextStyle(fontSize: 14, color: Colors.black87),
+                ),
                 const SizedBox(width: 4),
-                Text("（滿分1分）",
-                    style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                Text(
+                  "（滿分1分）",
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                ),
               ],
             ),
             const SizedBox(height: 8),
@@ -217,8 +290,7 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
               ),
             ),
             const SizedBox(height: 12),
-            Text(analysis,
-                style: const TextStyle(fontSize: 13, height: 1.5)),
+            Text(analysis, style: const TextStyle(fontSize: 13, height: 1.5)),
           ],
         ),
       ),
@@ -229,15 +301,29 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text("用戶留言",
-            style:
-                TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.deepGreen)),
+        const Text(
+          "用戶留言",
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: AppColors.deepGreen,
+          ),
+        ),
         const SizedBox(height: 8),
-        ..._comments.map((c) => ListTile(
+        if (_comments.isEmpty)
+          const Text("暫無留言", style: TextStyle(color: Colors.grey))
+        else
+          ..._comments.map(
+            (c) => ListTile(
               leading: const CircleAvatar(child: Icon(Icons.person)),
-              title: Text(c['author']!),
-              subtitle: Text(c['content']!),
-            )),
+              title: Text(c['author'] ?? '匿名用戶'),
+              subtitle: Text(c['content'] ?? ''),
+              trailing: Text(
+                c['time'] ?? '',
+                style: const TextStyle(fontSize: 10, color: Colors.grey),
+              ),
+            ),
+          ),
         const Divider(),
         Row(
           children: [
@@ -255,7 +341,8 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
             const SizedBox(width: 8),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.deepGreen),
+                backgroundColor: AppColors.deepGreen,
+              ),
               onPressed: _submitComment,
               child: const Text("發送", style: TextStyle(color: Colors.white)),
             ),
