@@ -18,6 +18,22 @@ class _HistoryPageState extends State<HistoryPage> {
   bool isLoading = true;
   bool isError = false;
 
+  static const Map<int, String> scoreLabels = {
+    0: "不可信",
+    1: "極低",
+    2: "低",
+    3: "中",
+    4: "高",
+    5: "極高",
+  };
+
+  // 顏色
+  Color scoreColor(int score) {
+    if (score >= 4) return Colors.green;
+    if (score >= 2) return Colors.orange;
+    return Colors.red;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -43,16 +59,22 @@ class _HistoryPageState extends State<HistoryPage> {
 
       if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(response.body);
+
         setState(() {
           viewHistory = data.map((item) {
+            final int score = (item["reliability_score"] ?? 0).toInt();
+
             return {
               "article_id": item["article_id"],
               "title": item["title"],
+              "media_name": item["media_name"],
               "url": item["source_link"],
-              "date": item["last_viewed_at"], // ✅ 後端傳這個欄位
-              "score": item["reliability_score"],
+              "date": item["viewed_at"],
+              "score": score,
+              "score_text": scoreLabels[score] ?? "未知",
             };
           }).toList();
+
           isLoading = false;
         });
       } else {
@@ -60,11 +82,6 @@ class _HistoryPageState extends State<HistoryPage> {
       }
     } catch (e) {
       print("❌ 載入瀏覽紀錄失敗: $e");
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text("載入瀏覽資料失敗，請稍後再試")));
-      }
       setState(() {
         isLoading = false;
         isError = true;
@@ -72,10 +89,35 @@ class _HistoryPageState extends State<HistoryPage> {
     }
   }
 
+  // ============================================================
+  // ⭐ 清除瀏覽紀錄 API
+  // ============================================================
+  Future<void> _clearHistory() async {
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
+    final userId = userProvider.userId;
+
+    if (userId == null) return;
+
+    final response = await http.delete(
+      Uri.parse('http://10.0.2.2:5000/api/history/$userId'),
+    );
+
+    if (response.statusCode == 200) {
+      setState(() {
+        viewHistory.clear();
+      });
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("已清除瀏覽紀錄")));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F5),
+
       appBar: AppBar(
         backgroundColor: const Color(0xFF9EB79E),
         leading: IconButton(
@@ -83,18 +125,17 @@ class _HistoryPageState extends State<HistoryPage> {
           color: Colors.white,
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Align(
-          alignment: Alignment.centerLeft,
-          child: Text(
-            "瀏覽歷史",
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-            ),
+        title: const Text("瀏覽歷史", style: TextStyle(color: Colors.white)),
+
+        // ⭐ 清除按鈕 ★
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.delete_forever, color: Colors.white),
+            onPressed: _clearHistory,
           ),
-        ),
+        ],
       ),
+
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : isError
@@ -108,6 +149,7 @@ class _HistoryPageState extends State<HistoryPage> {
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 itemBuilder: (context, index) {
                   final article = viewHistory[index];
+
                   return Container(
                     margin: const EdgeInsets.symmetric(
                       horizontal: 8,
@@ -151,18 +193,30 @@ class _HistoryPageState extends State<HistoryPage> {
                                 Row(
                                   children: [
                                     Text(
-                                      "瀏覽時間：${article["date"] ?? ""}",
+                                      "瀏覽時間：${article["date"]}",
                                       style: const TextStyle(
                                         fontSize: 12,
                                         color: Color(0xFF1A3D7A),
                                       ),
                                     ),
                                     const Spacer(),
-                                    Text(
-                                      "可信度：${article["score"] ?? '未知'}",
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.grey,
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 4,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(6),
+                                        color: scoreColor(
+                                          article["score"],
+                                        ).withOpacity(0.15),
+                                      ),
+                                      child: Text(
+                                        article["score_text"],
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: scoreColor(article["score"]),
+                                        ),
                                       ),
                                     ),
                                   ],

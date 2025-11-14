@@ -35,6 +35,8 @@ dependencies:
   # 密碼加密
   crypto: ^3.0.3
 
+  flutter_dotenv: ^5.1.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

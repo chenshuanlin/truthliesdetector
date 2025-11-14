@@ -9,7 +9,7 @@ import 'package:provider/provider.dart';
 import 'package:truthliesdetector/providers/user_provider.dart';
 
 class ArticleDetailPage extends StatefulWidget {
-  final int articleId; // ← 接收從 HomePage 傳來的 articleId
+  final int articleId;
 
   const ArticleDetailPage({super.key, required this.articleId});
 
@@ -24,49 +24,97 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
   Map<String, dynamic>? _articleData;
   bool _isLoading = true;
 
-  final List<Map<String, dynamic>> _comments = []; // ✅ 留言資料結構
+  final List<Map<String, dynamic>> _comments = [];
   final TextEditingController _commentController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     print("📰 開啟文章詳情頁，articleId = ${widget.articleId}");
-    _fetchArticleData(); // 抓文章內容
-    _fetchComments(); // ✅ 同時抓留言
+
+    _fetchArticleData();
+    _fetchComments();
+
+    // ⭐⭐⭐ 自動新增瀏覽紀錄 ⭐⭐⭐
+    _addViewHistory();
   }
 
-  // ==============================
-  // 📰 抓取文章詳情
-  // ==============================
+  // ============================================================
+  // ⭐ 新增瀏覽紀錄 POST /api/search-logs
+  // ============================================================
+  Future<void> _addViewHistory() async {
+    try {
+      final api = ApiService.getInstance();
+      final baseUrl = api.baseUrl;
+
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
+      final userId = userProvider.userId;
+
+      if (userId == null) {
+        print("⚠ 無法記錄瀏覽（尚未登入）");
+        return;
+      }
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/search-logs'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({"user_id": userId, "article_id": widget.articleId}),
+      );
+
+      print("📌 已送出瀏覽紀錄 user=$userId article=${widget.articleId}");
+      print("📌 回應：${response.body}");
+    } catch (e) {
+      print("❌ 新增瀏覽紀錄失敗: $e");
+    }
+  }
+
+  // ============================================================
+  // 📰 抓文章資料
+  // ============================================================
   Future<void> _fetchArticleData() async {
     try {
       final api = ApiService.getInstance();
-      final data = await api.fetchArticleDetail(widget.articleId);
-      setState(() {
-        _articleData = data;
-        _isLoading = false;
-      });
+      final baseUrl = api.baseUrl;
+
+      final response = await http
+          .get(Uri.parse('$baseUrl/api/articles/${widget.articleId}'))
+          .timeout(const Duration(seconds: 60));
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(
+          utf8.decode(response.bodyBytes),
+        );
+        setState(() {
+          _articleData = data;
+        });
+
+        await _fetchComments();
+      } else {
+        print('⚠️ 無法載入文章 (${response.statusCode})');
+      }
     } catch (e) {
       print('❌ 取得文章失敗: $e');
+    } finally {
       setState(() {
         _isLoading = false;
       });
     }
   }
 
-  // ==============================
-  // 💬 取得留言 (GET /api/articles/:id/comments)
-  // ==============================
+  // ============================================================
+  // 💬 抓留言
+  // ============================================================
   Future<void> _fetchComments() async {
     try {
       final api = ApiService.getInstance();
       final baseUrl = api.baseUrl;
-      final response = await http.get(
-        Uri.parse('$baseUrl/api/articles/${widget.articleId}/comments'),
-      );
+
+      final response = await http
+          .get(Uri.parse('$baseUrl/api/articles/${widget.articleId}/comments'))
+          .timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body);
+        final List<dynamic> data = json.decode(utf8.decode(response.bodyBytes));
         setState(() {
           _comments
             ..clear()
@@ -80,9 +128,9 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
     }
   }
 
-  // ==============================
-  // ✏️ 新增留言 (POST /api/articles/:id/comments)
-  // ==============================
+  // ============================================================
+  // ✏ 新增留言
+  // ============================================================
   Future<void> _submitComment() async {
     final content = _commentController.text.trim();
     if (content.isEmpty) return;
@@ -91,18 +139,16 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
       final api = ApiService.getInstance();
       final baseUrl = api.baseUrl;
 
-      // ✅ 取得登入者資訊
       final userProvider = Provider.of<UserProvider>(context, listen: false);
       final userId = userProvider.userId;
       final username = userProvider.username ?? "匿名用戶";
 
-      // ✅ 傳送留言
       final response = await http.post(
         Uri.parse('$baseUrl/api/articles/${widget.articleId}/comments'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           "author": username,
-          "user_id": userId, // ✅ 新增 userId
+          "user_id": userId,
           "content": content,
         }),
       );
@@ -110,7 +156,7 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
       if (response.statusCode == 201) {
         print('✅ 留言新增成功');
         _commentController.clear();
-        await _fetchComments(); // 🔁 發送後刷新留言
+        await _fetchComments();
       } else {
         print('⚠️ 留言失敗: ${response.body}');
       }
@@ -119,12 +165,9 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
     }
   }
 
-  @override
-  void dispose() {
-    _commentController.dispose();
-    super.dispose();
-  }
-
+  // ============================================================
+  // UI
+  // ============================================================
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -155,13 +198,6 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
           style: TextStyle(color: Colors.white, fontSize: 18),
         ),
         centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.bookmark_border, color: Colors.white),
-            onPressed: () {},
-          ),
-          const SizedBox(width: 8),
-        ],
       ),
       body: Stack(
         children: [
@@ -172,7 +208,7 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 📰 標題與可信度
+                  /// 標題
                   Text(
                     _articleData!['title'] ?? '未命名文章',
                     style: const TextStyle(
@@ -180,6 +216,7 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
+
                   const SizedBox(height: 8),
                   Row(
                     children: [
@@ -223,30 +260,19 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
                   ),
 
                   const SizedBox(height: 20),
-                  _buildCommentSection(), // ✅ 留言區
-
+                  _buildCommentSection(),
                   const SizedBox(height: 100),
                 ],
               ),
             ),
           ),
 
-          // 🔘 懸浮球
+          /// 懸浮球
           if (_showFab)
             FloatingActionMenu(
               screenshotController: _screenshotController,
               onTap: (index) {},
               onClose: () => setState(() => _showFab = false),
-            ),
-          if (!_showFab)
-            Positioned(
-              bottom: 20,
-              right: 20,
-              child: FloatingActionButton(
-                onPressed: () => setState(() => _showFab = true),
-                backgroundColor: AppColors.primaryGreen,
-                child: const Icon(Icons.apps, color: Colors.white),
-              ),
             ),
         ],
       ),
@@ -310,6 +336,7 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
           ),
         ),
         const SizedBox(height: 8),
+
         if (_comments.isEmpty)
           const Text("暫無留言", style: TextStyle(color: Colors.grey))
         else
@@ -324,7 +351,9 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
               ),
             ),
           ),
+
         const Divider(),
+
         Row(
           children: [
             Expanded(

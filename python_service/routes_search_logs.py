@@ -45,7 +45,7 @@ def get_history(user_id):
         return jsonify({"error": str(e)}), 500
 
 
-# ✅ 新增一筆瀏覽紀錄（同篇文章多次瀏覽會有多筆，但顯示取最新）
+# ✅ 新增或更新一筆瀏覽紀錄（去重複）
 @bp.route('/search-logs', methods=['POST'])
 def add_search_log():
     try:
@@ -56,14 +56,40 @@ def add_search_log():
         if not user_id or not article_id:
             return jsonify({"error": "缺少 user_id 或 article_id"}), 400
 
-        insert_sql = text("""
+        # ⭐⭐ 做去重複：如果已有紀錄，就更新時間，如果沒有就新增 ⭐⭐
+        upsert_sql = text("""
             INSERT INTO search_logs (user_id, article_id, searched_at)
-            VALUES (:user_id, :article_id, NOW());
+            VALUES (:user_id, :article_id, NOW())
+            ON CONFLICT (user_id, article_id)
+            DO UPDATE SET searched_at = EXCLUDED.searched_at;
         """)
-        db.session.execute(insert_sql, {"user_id": user_id, "article_id": article_id})
+
+        db.session.execute(upsert_sql, {
+            "user_id": user_id,
+            "article_id": article_id,
+        })
         db.session.commit()
+
         return jsonify({"ok": True, "message": "已記錄瀏覽"}), 201
+
     except Exception as e:
         db.session.rollback()
         print("❌ 新增瀏覽紀錄失敗:", e)
         return jsonify({"error": str(e)}), 500
+
+# ✅ 清除某使用者的瀏覽紀錄
+@bp.route('/history/<int:user_id>', methods=['DELETE'])
+def clear_history(user_id):
+    try:
+        delete_sql = text("""
+            DELETE FROM search_logs WHERE user_id = :user_id;
+        """)
+        db.session.execute(delete_sql, {"user_id": user_id})
+        db.session.commit()
+
+        return jsonify({"ok": True, "message": "已清除瀏覽紀錄"}), 200
+    except Exception as e:
+        db.session.rollback()
+        print("❌ 清除瀏覽紀錄錯誤:", e)
+        return jsonify({"error": str(e)}), 500
+

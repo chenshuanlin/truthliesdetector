@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:truthliesdetector/screens/article_page.dart';
 
 class SearchPage extends StatefulWidget {
@@ -11,19 +13,17 @@ class SearchPage extends StatefulWidget {
 }
 
 class _SearchPageState extends State<SearchPage> {
-  // 篩選選擇
   String selectedConfidence = "";
   String selectedTime = "";
   String selectedCategory = "";
   TextEditingController keywordController = TextEditingController();
 
-  // 主綠色
   final Color mainGreen = const Color(0xFF9EB79E);
-
-  // 控制「更多」展開
   bool showMore = false;
+  bool isLoading = false;
+  String errorMessage = "";
+  List<Map<String, dynamic>> articles = [];
 
-  // 所有標籤
   final List<String> allCategories = [
     "科技",
     "政治",
@@ -45,71 +45,59 @@ class _SearchPageState extends State<SearchPage> {
     "影視",
   ];
 
-  // 動態文章列表
-  List<Map<String, dynamic>> articles = [];
-
-  // 模擬後端搜尋
+  // 從 Flask 撈資料
   Future<void> fetchArticles() async {
-    List<Map<String, dynamic>> result = [
-      {
-        "article_id": 101,
-        "title": "「新冠肺炎特效藥」正式獲醫管署有效！",
-        "subtitle": "某新藥治療效果提高87%，多國醫療團隊證實......",
-        "credibility": "低可信度",
-        "content": "某新藥治療效果據報提高87%，多國醫療團隊進行初步觀察，但尚未經過大規模臨床試驗或官方正式認證。",
-        "source": "健康日報",
-        "time": "3小時前",
-      },
-      {
-        "article_id": 102,
-        "title": "新冠肺炎特效藥研發進展：臨床試驗階段",
-        "subtitle": "多種藥物進入第三階段臨床試驗，療效尚待確認......",
-        "credibility": "高可信度",
-        "content": "多種新冠肺炎治療藥物已進入第三階段臨床試驗，初步結果顯示部分藥物具有良好療效並且安全性可控。",
-        "source": "醫學期刊",
-        "time": "昨天",
-      },
-      {
-        "article_id": 103,
-        "title": "最新研究：新冠肺炎特效藥有效率分析",
-        "subtitle": "數據顯示特效藥可減少30%住院率，但副作用問題......",
-        "credibility": "中可信度",
-        "content": "最新研究顯示，新冠肺炎特效藥可降低約30%的住院率，但部分患者仍可能出現副作用，包括噁心、頭痛與疲倦。",
-        "source": "科學報告",
-        "time": "2天前",
-      },
-    ];
-
-    List<Map<String, dynamic>> filtered = result.where((article) {
-      bool matchKeyword =
-          keywordController.text.isEmpty ||
-          article["title"]!.toLowerCase().contains(
-            keywordController.text.toLowerCase(),
-          );
-      bool matchCredibility =
-          selectedConfidence.isEmpty ||
-          article["credibility"] == selectedConfidence;
-      bool matchCategory =
-          selectedCategory.isEmpty ||
-          article["title"]!.contains(selectedCategory);
-      bool matchTime = true;
-      return matchKeyword && matchCredibility && matchCategory && matchTime;
-    }).toList();
-
     setState(() {
-      articles = filtered;
+      isLoading = true;
+      errorMessage = "";
     });
+
+    try {
+      final uri = Uri.http("10.0.2.2:5000", "/api/articles/search", {
+        "keyword": keywordController.text,
+        "confidence": selectedConfidence,
+        "category": selectedCategory,
+        "time_filter": selectedTime,
+      });
+
+      final response = await http.get(uri);
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = json.decode(response.body);
+        setState(() {
+          articles = List<Map<String, dynamic>>.from(data);
+        });
+      } else {
+        setState(() {
+          errorMessage = "伺服器回傳錯誤 (${response.statusCode})";
+        });
+      }
+    } catch (e) {
+      setState(() {
+        errorMessage = "❌ 無法連線到伺服器：$e";
+      });
+    } finally {
+      setState(() {
+        isLoading = false;
+      });
+    }
   }
 
   // 可信度顏色
   Color getCredibilityColor(String level) {
     switch (level) {
+      case "極高可信度":
+        return Colors.green[800]!;
       case "高可信度":
         return Colors.green;
       case "中可信度":
         return Colors.orange;
       case "低可信度":
         return Colors.red;
+      case "極低可信度":
+        return Colors.red[800]!;
+      case "不可信":
+        return Colors.black54;
       default:
         return Colors.grey;
     }
@@ -141,8 +129,15 @@ class _SearchPageState extends State<SearchPage> {
                 label: Text(option),
                 selected: isSelected,
                 selectedColor: mainGreen.withOpacity(0.3),
-                onSelected: (_) {
-                  onSelected(option);
+                onSelected: (bool selectedValue) {
+                  setState(() {
+                    if (isSelected) {
+                      // ✅ 再次點擊可取消選取
+                      onSelected("");
+                    } else {
+                      onSelected(option);
+                    }
+                  });
                   fetchArticles();
                 },
               );
@@ -155,7 +150,9 @@ class _SearchPageState extends State<SearchPage> {
 
   // 文章卡片
   Widget _buildArticleCard(Map<String, dynamic> article) {
-    Color credColor = getCredibilityColor(article["credibility"] ?? "");
+    final cred = article["credibility_label"] ?? "未知";
+    final credColor = getCredibilityColor(cred);
+
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 6),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -165,8 +162,7 @@ class _SearchPageState extends State<SearchPage> {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) =>
-                  ArticleDetailPage(articleId: article["article_id"]),
+              builder: (_) => ArticleDetailPage(articleId: article["id"] ?? 0),
             ),
           );
         },
@@ -175,6 +171,7 @@ class _SearchPageState extends State<SearchPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // 標題
               Text(
                 article["title"] ?? "",
                 style: const TextStyle(
@@ -182,13 +179,11 @@ class _SearchPageState extends State<SearchPage> {
                   fontSize: 15,
                 ),
               ),
-              const SizedBox(height: 4),
-              Text(
-                article["subtitle"] ?? "",
-                style: TextStyle(fontSize: 13, color: Colors.grey[700]),
-              ),
               const SizedBox(height: 6),
+
+              // 標籤 + 來源 + 時間
               Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Container(
                     padding: const EdgeInsets.symmetric(
@@ -200,14 +195,20 @@ class _SearchPageState extends State<SearchPage> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
-                      article["credibility"] ?? "",
+                      cred,
                       style: TextStyle(color: credColor, fontSize: 12),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  const Spacer(),
-                  Text(
-                    "${article["source"]}・${article["time"]}",
-                    style: const TextStyle(color: Colors.grey, fontSize: 12),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      "${article["media_name"] ?? "未知來源"}・${article["published_time"] ?? ""}",
+                      style: const TextStyle(color: Colors.grey, fontSize: 12),
+                      textAlign: TextAlign.right,
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    ),
                   ),
                 ],
               ),
@@ -232,19 +233,12 @@ class _SearchPageState extends State<SearchPage> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F5),
-      appBar: AppBar(
-        backgroundColor: mainGreen,
-        title: const Text(
-          "搜尋文章",
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-        ),
-      ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 搜尋框
+            // 🔍 搜尋框
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12),
               decoration: BoxDecoration(
@@ -271,40 +265,39 @@ class _SearchPageState extends State<SearchPage> {
             ),
             const SizedBox(height: 16),
 
+            // 篩選區塊
             _buildFilterSection(
               "可信度篩選",
               ["極高可信度", "高可信度", "中可信度", "低可信度", "極低可信度", "不可信"],
               selectedConfidence,
-              (val) => setState(() => selectedConfidence = val),
+              (val) => selectedConfidence = val,
             ),
             _buildFilterSection(
               "發布時間",
               ["今天", "本週", "本月"],
               selectedTime,
-              (val) => setState(() => selectedTime = val),
+              (val) => selectedTime = val,
             ),
-
-            // 🔹 主題類別（有更多按鈕）
             _buildFilterSection(
               "主題類別",
               displayedCategories,
               selectedCategory,
-              (val) => setState(() => selectedCategory = val),
+              (val) => selectedCategory = val,
             ),
+
+            // 更多按鈕
             Align(
               alignment: Alignment.centerLeft,
               child: TextButton.icon(
-                onPressed: () {
-                  setState(() {
-                    showMore = !showMore;
-                  });
-                },
+                onPressed: () => setState(() => showMore = !showMore),
                 icon: Icon(showMore ? Icons.expand_less : Icons.expand_more),
                 label: Text(showMore ? "收起" : "更多"),
               ),
             ),
 
             const SizedBox(height: 10),
+
+            // 結果標題
             Row(
               children: [
                 const Text(
@@ -319,8 +312,14 @@ class _SearchPageState extends State<SearchPage> {
               ],
             ),
             const SizedBox(height: 8),
+
+            // 結果列表
             Expanded(
-              child: articles.isEmpty
+              child: isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : errorMessage.isNotEmpty
+                  ? Center(child: Text(errorMessage))
+                  : articles.isEmpty
                   ? const Center(child: Text("目前沒有符合的文章"))
                   : ListView.builder(
                       itemCount: articles.length,
