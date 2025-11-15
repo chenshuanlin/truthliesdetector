@@ -1,8 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
-import 'dart:io';
 
 // 假設這些檔案已存在於您的專案中
 import 'package:truthliesdetector/themes/app_colors.dart';
@@ -129,9 +126,7 @@ class _AIaccState extends State<AIacc> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => AIchat(
-          initialQuery: messageToSend,
-        ),
+        builder: (context) => AIchat(initialQuery: messageToSend),
       ),
     );
 
@@ -271,7 +266,10 @@ class _AIaccState extends State<AIacc> {
                   // ✅ 上傳檔案區域
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 10),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 15,
+                      horizontal: 10,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(10),
@@ -329,7 +327,10 @@ class _AIaccState extends State<AIacc> {
                       ),
                       child: const Text(
                         '立即查證',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ),
@@ -357,7 +358,10 @@ class _AIaccState extends State<AIacc> {
                           children: [
                             const Text(
                               '歷史查詢',
-                              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                             TextButton(
                               onPressed: () {
@@ -390,36 +394,53 @@ class _AIaccState extends State<AIacc> {
                                   children: [
                                     Text(
                                       query['title']!,
-                                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w500,
+                                      ),
                                     ),
                                     const SizedBox(height: 8),
                                     Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
                                       children: [
                                         Row(
                                           children: [
                                             Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 8,
+                                                    vertical: 4,
+                                                  ),
                                               decoration: BoxDecoration(
                                                 color: AppColors.primaryGreen,
-                                                borderRadius: BorderRadius.circular(5),
+                                                borderRadius:
+                                                    BorderRadius.circular(5),
                                               ),
                                               child: Text(
                                                 query['status']!,
-                                                style: const TextStyle(color: Colors.black54, fontSize: 12),
+                                                style: const TextStyle(
+                                                  color: Colors.black54,
+                                                  fontSize: 12,
+                                                ),
                                               ),
                                             ),
                                             const SizedBox(width: 8),
                                             Text(
                                               query['time']!,
-                                              style: const TextStyle(color: Colors.grey, fontSize: 12),
+                                              style: const TextStyle(
+                                                color: Colors.grey,
+                                                fontSize: 12,
+                                              ),
                                             ),
                                           ],
                                         ),
                                         Text(
                                           query['confidence']!,
                                           style: TextStyle(
-                                            color: _getConfidenceColor(query['confidence']!),
+                                            color: _getConfidenceColor(
+                                              query['confidence']!,
+                                            ),
                                             fontSize: 12,
                                             fontWeight: FontWeight.bold,
                                           ),

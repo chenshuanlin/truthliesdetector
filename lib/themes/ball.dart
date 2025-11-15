@@ -4,7 +4,6 @@ import 'package:truthliesdetector/screens/AIchat.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:screenshot/screenshot.dart';
 import 'dart:typed_data';
-import 'package:truthliesdetector/screens/home_page.dart';
 
 /// 可拖曳的懸浮球，支援展開子選單
 class FloatingActionMenu extends StatefulWidget {
@@ -81,7 +80,8 @@ class _FloatingActionMenuState extends State<FloatingActionMenu>
   Future<void> _recognizeImage() async {
     _toggleMenu();
     if (widget.screenshotController != null) {
-      final Uint8List? imageBytes = await widget.screenshotController!.capture();
+      final Uint8List? imageBytes = await widget.screenshotController!
+          .capture();
       if (imageBytes != null) {
         Navigator.push(
           context,
@@ -94,15 +94,15 @@ class _FloatingActionMenuState extends State<FloatingActionMenu>
         );
       }
     } else {
-      FilePickerResult? result =
-          await FilePicker.platform.pickFiles(type: FileType.image);
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.image,
+      );
       if (result != null) {
         String filePath = result.files.single.name;
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) =>
-                AIchat(initialQuery: '請幫我辨識這張圖片: $filePath'),
+            builder: (context) => AIchat(initialQuery: '請幫我辨識這張圖片: $filePath'),
           ),
         );
       }
@@ -134,8 +134,8 @@ class _FloatingActionMenuState extends State<FloatingActionMenu>
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => AIchat(
-                        initialQuery: '請幫我辨識這個網址的內容: $url'),
+                    builder: (context) =>
+                        AIchat(initialQuery: '請幫我辨識這個網址的內容: $url'),
                   ),
                 );
                 Navigator.of(dialogContext).pop();
@@ -221,11 +221,7 @@ class _FloatingActionMenuState extends State<FloatingActionMenu>
                 borderRadius: BorderRadius.circular(50),
                 side: const BorderSide(color: Colors.white, width: 3),
               ),
-              child: Image.asset(
-                'lib/assets/logo2.png',
-                width: 50,
-                height: 50,
-              ),
+              child: Image.asset('lib/assets/logo2.png', width: 50, height: 50),
             ),
           ),
         ),
@@ -244,7 +240,7 @@ class _FloatingActionMenuState extends State<FloatingActionMenu>
               foregroundColor: AppColors.primaryGreen,
             ),
           ),
-          
+
           // 輸入網址 (第二個)
           Positioned(
             left: _offset.dx - _spacing,
@@ -257,7 +253,7 @@ class _FloatingActionMenuState extends State<FloatingActionMenu>
               foregroundColor: AppColors.primaryGreen,
             ),
           ),
-          
+
           // 截圖 (第三個)
           Positioned(
             left: _offset.dx - _spacing,

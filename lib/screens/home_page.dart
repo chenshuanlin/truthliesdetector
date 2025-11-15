@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:truthliesdetector/screens/Article_page.dart'; // ✅ 對應 ArticleDetailPage
+import 'package:truthliesdetector/screens/Article_page.dart';
 import 'package:truthliesdetector/services/api_service.dart';
 
 class HomePage extends StatefulWidget {
@@ -11,10 +11,9 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
-  TabController? _tabController; // ✅ 改成可為 null
+  TabController? _tabController;
 
   final Color mainGreen = const Color(0xFF8BA88E);
-  final Color bgGrey = const Color(0xFFF5F5F5);
 
   List<dynamic> trendingArticles = [];
   Map<String, List<dynamic>> categorizedRecommendations = {};
@@ -25,7 +24,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    _fetchData(); // ✅ 不先初始化 TabController，等資料來了再建立
+    _fetchData();
   }
 
   Future<void> _fetchData() async {
@@ -35,21 +34,17 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       final recommend = await api.fetchRecommendations();
       final ranking = await api.fetchRanking();
 
-      // 排行榜依 reliability_score 降冪
       ranking.sort(
-        (a, b) => (b['reliability_score'] ?? 0).compareTo(
-          a['reliability_score'] ?? 0,
-        ),
+        (a, b) => (b['reliability_score'] ?? 0)
+            .compareTo(a['reliability_score'] ?? 0),
       );
 
-      // 依 category 分組推薦文章
       Map<String, List<dynamic>> grouped = {};
       for (var article in recommend) {
         String cat = article['category'] ?? '其他';
         grouped.putIfAbsent(cat, () => []).add(article);
       }
 
-      // ✅ 根據實際類別數量建立 TabController
       _tabController?.dispose();
       _tabController = TabController(
         length: grouped.keys.isNotEmpty ? grouped.keys.length : 1,
@@ -85,8 +80,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        _buildSearchBar(),
-        const SizedBox(height: 24),
+        // 🔥🔥 搜尋列已完全移除 🔥🔥
+
         const Text(
           "熱門趨勢",
           style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
@@ -105,8 +100,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
         if (categorizedRecommendations.isNotEmpty &&
             _tabController != null &&
-            _tabController!.length ==
-                categorizedRecommendations.keys.length) // ✅ 避免長度不符錯誤
+            _tabController!.length == categorizedRecommendations.keys.length)
           Column(
             children: [
               TabBar(
@@ -150,14 +144,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               "今日排行榜",
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
-            TextButton(
-              onPressed: () {},
-              child: Text("更多", style: TextStyle(color: mainGreen)),
-            ),
+            
           ],
         ),
-        const SizedBox(height: 12),
 
+        const SizedBox(height: 12),
         rankingArticles.isNotEmpty
             ? Column(
                 children: rankingArticles.map((a) {
@@ -174,35 +165,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildSearchBar() {
-    return GestureDetector(
-      onTap: () => print("Search tapped!"),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(25),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 6,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
-        child: const Row(
-          children: [
-            Icon(Icons.search, color: Colors.grey),
-            SizedBox(width: 8),
-            Text(
-              "搜尋文章、標籤或主題",
-              style: TextStyle(color: Colors.grey, fontSize: 14),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  // ------------------ 下方元件保持不動 ------------------
 
   Widget _buildTrendingCard(Map<String, dynamic> article) {
     return Card(
@@ -214,7 +177,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => ArticleDetailPage(articleId: article['id'] ?? 0),
+              builder: (_) =>
+                  ArticleDetailPage(articleId: article['id'] ?? 0),
             ),
           );
         },
@@ -254,7 +218,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => ArticleDetailPage(articleId: a['id'] ?? 0),
+                builder: (_) =>
+                    ArticleDetailPage(articleId: a['id'] ?? 0),
               ),
             );
           },
@@ -312,7 +277,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => ArticleDetailPage(articleId: articleId ?? 0),
+              builder: (_) =>
+                  ArticleDetailPage(articleId: articleId ?? 0),
             ),
           );
         },
@@ -328,7 +294,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           title,
           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
         ),
-        subtitle: Text(subtitle, style: const TextStyle(color: Colors.black54)),
+        subtitle:
+            Text(subtitle, style: const TextStyle(color: Colors.black54)),
         trailing: const Icon(Icons.arrow_forward_ios, size: 16),
       ),
     );
