@@ -11,6 +11,7 @@ from routes_favorites import bp as favorites_bp
 from routes_search_logs import bp as search_logs_bp
 from routes_articles import bp as articles_bp   # ✅ 包含 /api/articles/search
 from routes_comments import bp as comments_bp
+from routes_reports import bp as reports_bp
 
 import base64, cv2, numpy as np, requests
 
@@ -39,6 +40,7 @@ def create_app():
     app.register_blueprint(search_logs_bp, url_prefix="/api")
     app.register_blueprint(articles_bp, url_prefix="/api")   # ✅ 搜尋功能在這裡
     app.register_blueprint(comments_bp, url_prefix="/api")
+    app.register_blueprint(reports_bp, url_prefix="/api/reports")
 
     # ✅ 註冊影像分析路由（可留用）
     app = register_image_route(app)

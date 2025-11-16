@@ -131,3 +131,16 @@ class Comment(db.Model):
             "content": self.content,
             "time": self.commented_at.strftime("%Y-%m-%d %H:%M") if self.commented_at else None,
         }
+
+# =====================================
+# 💬 舉報（對應 reports 資料表）
+# =====================================
+class Reports(db.Model):
+    __tablename__ = "reports"
+
+    report_id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.user_id"), nullable=False)
+    article_id = db.Column(db.Integer, db.ForeignKey("articles.article_id"), nullable=False)
+    reason = db.Column(db.Text, nullable=False)
+    status = db.Column(db.String(20), default="待審核")
+    reported_at = db.Column(db.DateTime, default=datetime.utcnow)
