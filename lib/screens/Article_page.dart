@@ -273,9 +273,9 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
 
     final credibility =
         (_articleData!['reliability_score'] ?? 0.0).toDouble();
-    final credibilityColor = credibility > 0.7
+    final credibilityColor = credibility > 3.0
         ? AppColors.deepGreen
-        : (credibility > 0.4 ? Colors.orange : AppColors.dangerRed);
+        : (credibility > 2.0 ? Colors.orange : AppColors.dangerRed);
 
     return Scaffold(
       backgroundColor: Colors.grey[100],
@@ -323,9 +323,9 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
-                    credibility > 0.7
+                    credibility > 3.0
                         ? "高可信度"
-                        : (credibility > 0.4 ? "中等可信度" : "低可信度"),
+                        : (credibility > 2.0 ? "中等可信度" : "低可信度"),
                     style: TextStyle(
                         color: credibilityColor, fontSize: 12),
                   ),
@@ -365,43 +365,49 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
           children: [
             const Text(
               "AI可信度分析",
-              style:
-                  TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
+
             Row(
               children: [
                 Text(
                   "可信度評分：${credibility.toStringAsFixed(2)}",
-                  style:
-                      const TextStyle(fontSize: 14, color: Colors.black87),
+                  style: const TextStyle(fontSize: 14, color: Colors.black87),
                 ),
                 const SizedBox(width: 4),
                 Text(
-                  "（1-5分）",
+                  "（0-5分）",
                   style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                 ),
               ],
             ),
+
             const SizedBox(height: 8),
+
+            // ⭐ 修正後的進度條
             LinearProgressIndicator(
-              value: credibility,
+              value: (credibility / 5).clamp(0.0, 1.0), // 0-5 → 0-1
               backgroundColor: Colors.grey[200],
               valueColor: AlwaysStoppedAnimation<Color>(
-                credibility > 0.7
+                credibility > 3.0
                     ? AppColors.deepGreen
-                    : (credibility > 0.4
-                        ? Colors.orange
-                        : AppColors.dangerRed),
+                    : (credibility > 2.0 ? Colors.orange : AppColors.dangerRed),
               ),
             ),
+
             const SizedBox(height: 12),
-            Text(analysis, style: const TextStyle(fontSize: 13, height: 1.5)),
+
+            Text(
+              analysis,
+              style: const TextStyle(fontSize: 13, height: 1.5),
+            ),
           ],
         ),
       ),
     );
   }
+
 
   Widget _buildCommentSection() {
     return Column(
