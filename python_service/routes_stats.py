@@ -150,59 +150,46 @@ def fake_news_stats():
     sys.stderr.flush()
     
 
-    # 改為統計最近7天的資料
-    now = datetime.utcnow()
-    
-    # 統計最近7天資料（包含今天）
+    # 只統計近7天的資料
     verified_daily = get_daily_distribution(verified_items, 7)
     unverified_daily = get_daily_distribution(unverified_items, 7)
-    
-    # 計算最近7天的總數
-    verified_week = sum(verified_daily.get(i, 0) for i in range(7))
-    unverified_week = sum(unverified_daily.get(i, 0) for i in range(7))
+    # 近7天總數
+    verified_week = sum(verified_daily.values())
+    unverified_week = sum(unverified_daily.values())
     total_week = verified_week + unverified_week
     if total_week == 0:
         ai_accuracy = 0
     else:
         ai_accuracy = round((verified_week / total_week) * 100)
 
-    # 週報圖表資料（顯示最近7天，按星期一到日排列）
+    # 週報圖表資料
+    now = datetime.utcnow()
+    start = (now - timedelta(days=6)).date()
     weekly = []
-    # 計算今天是星期幾，以此對應到圖表位置
-    today_weekday = now.weekday()  # 0=週一, 1=週二, ..., 6=週日
-    
-    # 從今天往回推7天，對應到星期幾
     for i in range(7):
-        days_ago = 6 - i  # 從6天前到今天
-        date_for_day = now.date() - timedelta(days=days_ago)
-        weekday_index = date_for_day.weekday()  # 該日期是星期幾
-        
-        verified = verified_daily.get(days_ago, 0)
-        suspicious = unverified_daily.get(days_ago, 0)
-        
+        d = start + timedelta(days=i)
+        day_offset = 6 - i
+        verified = verified_daily.get(day_offset, 0)
+        suspicious = unverified_daily.get(day_offset, 0)
         weekly.append({
-            'day': ['一','二','三','四','五','六','日'][weekday_index],
+            'day': ['一','二','三','四','五','六','日'][d.weekday()],
             'verified': verified,
             'suspicious': suspicious,
         })
 
-    # 最近7天的標題做分類（統計最近7天的資料）
+    # 只用近7天的標題做分類
     week_items = []
-    seven_days_ago = now.date() - timedelta(days=6)  # 最近7天（包含今天）
     for item in verified_items + unverified_items:
         crawled_at = item.get('crawled_at')
         if crawled_at:
             try:
                 crawled_time = datetime.fromisoformat(crawled_at)
-                crawled_date = crawled_time.date()
-                # 只要最近7天的資料
-                if seven_days_ago <= crawled_date <= now.date():
+                if (datetime.utcnow().date() - crawled_time.date()).days < 7:
                     week_items.append(item)
             except Exception:
                 continue
         else:
-            # 沒有時間戳的資料也算進來
-            week_items.append(item)
+            week_items.append(item)  # 沒有時間戳的也算進來
     all_titles = [item.get('title', '') for item in week_items if item.get('title')]
     top_categories = _categorize_titles(all_titles)
     propagation_channels = _infer_channels(all_titles)

@@ -11,6 +11,8 @@ class UserProvider extends ChangeNotifier {
   User? get currentUser => _currentUser;
   bool get isLoggedIn => _isLoggedIn;
   bool get isLoading => _isLoading;
+  int? get userId => _currentUser?.userId;
+  String? get username => _currentUser?.username;
 
   final ApiService _api = ApiService.getInstance();
 
@@ -22,7 +24,7 @@ class UserProvider extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       final userId = prefs.getInt('user_id');
-      
+
       if (userId != null) {
         final user = await _api.getUser(userId);
         if (user != null) {
@@ -48,11 +50,11 @@ class UserProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-  final user = await _api.login(account, password);
+      final user = await _api.login(account, password);
       if (user != null) {
         _currentUser = user;
         _isLoggedIn = true;
-        
+
         // 儲存登入狀態到本地
         final prefs = await SharedPreferences.getInstance();
         await prefs.setInt('user_id', user.userId!);
@@ -99,7 +101,11 @@ class UserProvider extends ChangeNotifier {
   }
 
   // 更新用戶資料
-  Future<bool> updateUserProfile(String username, String email, String? phone) async {
+  Future<bool> updateUserProfile(
+    String username,
+    String email,
+    String? phone,
+  ) async {
     if (_currentUser == null) return false;
 
     _isLoading = true;
@@ -115,10 +121,10 @@ class UserProvider extends ChangeNotifier {
         phone: phone,
       );
 
-  final success = await _api.updateUser(updatedUser);
+      final success = await _api.updateUser(updatedUser);
       if (success) {
         _currentUser = updatedUser;
-        
+
         // 更新本地儲存
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('username', username);
@@ -152,7 +158,7 @@ class UserProvider extends ChangeNotifier {
   Future<void> clearUserData() async {
     _currentUser = null;
     _isLoggedIn = false;
-    
+
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('user_id');
     await prefs.remove('account');

@@ -47,7 +47,7 @@ class BarData {
   final String label; // 星期幾或月份標籤
 
   BarData(this.verified, this.suspicious, this.label);
-  
+
   // 總數
   double get total => verified + suspicious;
 }
@@ -105,20 +105,33 @@ class _AiReportPageState extends State<AiReportPage> {
     // 直接從 totalVerified 和 totalSuspicious 計算 AI 辨識率
     final total = totalVerified + totalSuspicious;
     final aiAccuracy = total > 0 ? ((totalVerified / total * 100).round()) : 0;
-  final topCategories = stats['topCategories'] as List<dynamic>? ?? [];
-  final propagationChannels = stats['propagationChannels'] as List<dynamic>? ?? [];
+    final topCategories = stats['topCategories'] as List<dynamic>? ?? [];
+    final propagationChannels =
+        stats['propagationChannels'] as List<dynamic>? ?? [];
 
     // 動態產生折線圖資料（以 verified+suspicious 為熱度）
-  final List<double> lineChartData = weeklyReports.isNotEmpty
-    ? weeklyReports.map((r) => ((r['verified'] ?? 0) + (r['suspicious'] ?? 0)).toDouble()).toList(growable: false).cast<double>()
-    : [10.0, 15.0, 12.0, 20.0, 25.0, 22.0, 28.0];
+    final List<double> lineChartData = weeklyReports.isNotEmpty
+        ? weeklyReports
+              .map(
+                (r) =>
+                    ((r['verified'] ?? 0) + (r['suspicious'] ?? 0)).toDouble(),
+              )
+              .toList(growable: false)
+              .cast<double>()
+        : [10.0, 15.0, 12.0, 20.0, 25.0, 22.0, 28.0];
 
     // 動態產生圓餅圖資料（以 topCategories）
     final List<ChartData> pieChartData = propagationChannels.isNotEmpty
         ? propagationChannels.map<ChartData>((c) {
             final name = c['channel']?.toString() ?? '';
-            final percent = (c['percentage'] is num) ? (c['percentage'] as num).toDouble() : 0.0;
-            final color = name.contains('社群') ? AppColors.dangerRed : (name.contains('私人') ? AppColors.primaryGreen : AppColors.userGray);
+            final percent = (c['percentage'] is num)
+                ? (c['percentage'] as num).toDouble()
+                : 0.0;
+            final color = name.contains('社群')
+                ? AppColors.dangerRed
+                : (name.contains('私人')
+                      ? AppColors.primaryGreen
+                      : AppColors.userGray);
             return ChartData(name, percent, color);
           }).toList()
         : [
@@ -129,16 +142,19 @@ class _AiReportPageState extends State<AiReportPage> {
 
     // 動態產生週報標題（自動帶入今天日期）
     final now = DateTime.now();
-    final weekTitle = '假訊息監測完整報告 (週報) - ${now.year}/${now.month.toString().padLeft(2, '0')}/${now.day.toString().padLeft(2, '0')}';
+    final weekTitle =
+        '假訊息監測完整報告 (週報) - ${now.year}/${now.month.toString().padLeft(2, '0')}/${now.day.toString().padLeft(2, '0')}';
 
     // 動態產生熱門趨勢分析
     String buildCategoryDesc(List<dynamic> cats) {
       if (cats.isEmpty) return '（本週無顯著主題）';
-      return cats.map((cat) {
-        final name = cat['name'] ?? '';
-        final percent = cat['percentage'] ?? 0;
-        return '・$name（$percent%）';
-      }).join('\n');
+      return cats
+          .map((cat) {
+            final name = cat['name'] ?? '';
+            final percent = cat['percentage'] ?? 0;
+            return '・$name（$percent%）';
+          })
+          .join('\n');
     }
 
     // 動態產生情感分佈（如有）
@@ -150,23 +166,26 @@ class _AiReportPageState extends State<AiReportPage> {
     return {
       0: {
         'title': weekTitle,
-        'content': '本週共偵測到 **${totalVerified + totalSuspicious}** 條疑似假訊息，其中 **$totalVerified 條**經 AI 交叉比對後確認為假消息，AI 準確率達 **$aiAccuracy%**。\n\n**熱門趨勢分析:**\n${buildCategoryDesc(topCategories)}\n\n**建議:** 立即對高傳播風險的假訊息進行人工複核和澄清。',
+        'content':
+            '本週共偵測到 **${totalVerified + totalSuspicious}** 條疑似假訊息，其中 **$totalVerified 條**經 AI 交叉比對後確認為假消息，AI 準確率達 **$aiAccuracy%**。\n\n**熱門趨勢分析:**\n${buildCategoryDesc(topCategories)}\n\n**建議:** 立即對高傳播風險的假訊息進行人工複核和澄清。',
         'chart_data': _buildWeeklyChartData(weeklyReports),
         'chart_type': 'bar',
       },
       1: {
         'title': '新聞趨勢與熱度完整分析',
-        'content': '本週新聞總量相較上週增長 **15%**。熱度最高的關鍵詞如下：\n${buildCategoryDesc(topCategories)}\n\n**情感分佈:**\n${buildSentimentDesc()}\n\n**預測:** 預計下週主題將持續主導輿論，建議準備相關事實查核素材，以防衍生假消息。',
+        'content':
+            '本週新聞總量相較上週增長 **15%**。熱度最高的關鍵詞如下：\n${buildCategoryDesc(topCategories)}\n\n**情感分佈:**\n${buildSentimentDesc()}\n\n**預測:** 預計下週主題將持續主導輿論，建議準備相關事實查核素材，以防衍生假消息。',
         'chart_data': lineChartData,
         'chart_type': 'line',
       },
       2: {
         'title': '假訊息傳播網路完整報告',
-        'content': '傳播速度比上週加快 **25%**。\n\n**主要傳播途徑分佈:**\n${(propagationChannels.isNotEmpty ? propagationChannels : [
-          {'channel': '社群媒體', 'percentage': 45},
-          {'channel': '私人訊息群組', 'percentage': 30},
-          {'channel': '傳統媒體/網站', 'percentage': 25},
-        ]).map((c) => '* ${c['channel']} (${c['percentage']}%)').join('\n')}\n\n**高風險節點:** 「KOL_金融達人」和「匿名論壇」被識別為本週最主要的假訊息擴散源頭。',
+        'content':
+            '傳播速度比上週加快 **25%**。\n\n**主要傳播途徑分佈:**\n${(propagationChannels.isNotEmpty ? propagationChannels : [
+                    {'channel': '社群媒體', 'percentage': 45},
+                    {'channel': '私人訊息群組', 'percentage': 30},
+                    {'channel': '傳統媒體/網站', 'percentage': 25},
+                  ]).map((c) => '* ${c['channel']} (${c['percentage']}%)').join('\n')}\n\n**高風險節點:** 「KOL_金融達人」和「匿名論壇」被識別為本週最主要的假訊息擴散源頭。',
         'chart_data': pieChartData,
         'chart_type': 'pie',
       },
@@ -176,8 +195,12 @@ class _AiReportPageState extends State<AiReportPage> {
   List<BarData> _buildWeeklyChartData(List<dynamic> weeklyReports) {
     if (weeklyReports.isEmpty) {
       return [
-        BarData(2, 3, '一'), BarData(3, 4, '二'), BarData(2, 2, '三'),
-        BarData(3, 5, '四'), BarData(2, 3, '五'), BarData(2, 2, '六'),
+        BarData(2, 3, '一'),
+        BarData(3, 4, '二'),
+        BarData(2, 2, '三'),
+        BarData(3, 5, '四'),
+        BarData(2, 3, '五'),
+        BarData(2, 2, '六'),
         BarData(1, 2, '日'),
       ];
     }
@@ -195,34 +218,43 @@ class _AiReportPageState extends State<AiReportPage> {
       return '* 健康與疫苗 (38%): 主要散佈在私人訊息群組，內容涉及未經證實的療法。\n* 選舉與政治 (29%): 多數源於社群媒體，與特定候選人或政策相關。';
     }
 
-    return categories.map((cat) {
-      final name = cat['name'] as String? ?? '';
-      final percentage = cat['percentage'] as int? ?? 0;
-      return '* $name ($percentage%)';
-    }).join('\n');
+    return categories
+        .map((cat) {
+          final name = cat['name'] as String? ?? '';
+          final percentage = cat['percentage'] as int? ?? 0;
+          return '* $name ($percentage%)';
+        })
+        .join('\n');
   }
 
   Map<int, Map<String, dynamic>> _getDefaultReportData() {
     return {
       0: {
         'title': '假訊息監測完整報告 (週報)',
-        'content': '本週共偵測到 **157** 條疑似假訊息，其中 **32 條**經 AI 交叉比對後確認為假消息，相較上週增長 **18%**。主要增長點集中在政治和健康類別。\n\n**熱門趨勢分析:**\n* 健康與疫苗 (38%): 主要散佈在私人訊息群組，內容涉及未經證實的療法。\n* 選舉與政治 (29%): 多數源於社群媒體，與特定候選人或政策相關。\n* 經濟相關 (18%): 主要為投資誘餌和市場謠言。\n\n**建議:** 立即對高傳播風險的「健康類假訊息」進行人工複核和澄清。',
+        'content':
+            '本週共偵測到 **157** 條疑似假訊息，其中 **32 條**經 AI 交叉比對後確認為假消息，相較上週增長 **18%**。主要增長點集中在政治和健康類別。\n\n**熱門趨勢分析:**\n* 健康與疫苗 (38%): 主要散佈在私人訊息群組，內容涉及未經證實的療法。\n* 選舉與政治 (29%): 多數源於社群媒體，與特定候選人或政策相關。\n* 經濟相關 (18%): 主要為投資誘餌和市場謠言。\n\n**建議:** 立即對高傳播風險的「健康類假訊息」進行人工複核和澄清。',
         'chart_data': [
-          BarData(2, 3, '一'), BarData(3, 4, '二'), BarData(2, 2, '三'),
-          BarData(3, 5, '四'), BarData(2, 3, '五'), BarData(2, 2, '六'),
+          BarData(2, 3, '一'),
+          BarData(3, 4, '二'),
+          BarData(2, 2, '三'),
+          BarData(3, 5, '四'),
+          BarData(2, 3, '五'),
+          BarData(2, 2, '六'),
           BarData(1, 2, '日'),
         ],
         'chart_type': 'bar',
       },
       1: {
         'title': '新聞趨勢與熱度完整分析',
-        'content': '本週新聞總量相較上週增長 **15%**。熱度最高的關鍵詞是「能源政策」，熱度增長達 **45%**。\n\n**情感分佈:**\n* 中性: 65%\n* 負面: 25% (集中在國際貿易協定)\n* 正面: 10%\n\n**預測:** 預計下週「能源政策」將持續主導輿論，建議準備相關事實查核素材，以防衍生假消息。',
+        'content':
+            '本週新聞總量相較上週增長 **15%**。熱度最高的關鍵詞是「能源政策」，熱度增長達 **45%**。\n\n**情感分佈:**\n* 中性: 65%\n* 負面: 25% (集中在國際貿易協定)\n* 正面: 10%\n\n**預測:** 預計下週「能源政策」將持續主導輿論，建議準備相關事實查核素材，以防衍生假消息。',
         'chart_data': [10.0, 15.0, 12.0, 20.0, 25.0, 22.0, 28.0],
         'chart_type': 'line',
       },
       2: {
         'title': '假訊息傳播網路完整報告',
-        'content': '傳播速度比上週加快 **25%**。健康類假訊息 (來自 LINE 群組) 在 48 小時內達到峰值。\n\n**主要傳播途徑分佈:**\n* 社群媒體 (Facebook, X): 45%\n* 私人訊息群組 (LINE, Telegram): 30%\n* 傳統媒體/網站: 25%\n\n**高風險節點:** 「KOL\_金融達人」和「匿名論壇」被識別為本週最主要的假訊息擴散源頭。',
+        'content':
+            '傳播速度比上週加快 **25%**。健康類假訊息 (來自 LINE 群組) 在 48 小時內達到峰值。\n\n**主要傳播途徑分佈:**\n* 社群媒體 (Facebook, X): 45%\n* 私人訊息群組 (LINE, Telegram): 30%\n* 傳統媒體/網站: 25%\n\n**高風險節點:** 「KOL_金融達人」和「匿名論壇」被識別為本週最主要的假訊息擴散源頭。',
         'chart_data': [
           ChartData('社群媒體', 45, AppColors.primaryGreen),
           ChartData('私人訊息群組', 30, AppColors.primaryGreen2),
@@ -261,19 +293,28 @@ class _AiReportPageState extends State<AiReportPage> {
                 children: [
                   CircularProgressIndicator(color: AppColors.primaryGreen),
                   SizedBox(height: 16),
-                  Text('正在載入最新數據...', style: TextStyle(color: AppColors.darkText)),
+                  Text(
+                    '正在載入最新數據...',
+                    style: TextStyle(color: AppColors.darkText),
+                  ),
                 ],
               ),
             )
           : SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 20.0),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16.0,
+                vertical: 20.0,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // 新增：每日自動更新說明
                   Container(
                     margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.yellow[100],
                       borderRadius: BorderRadius.circular(8),
@@ -303,7 +344,11 @@ class _AiReportPageState extends State<AiReportPage> {
   }
 
   // 單個 Tab 項目
-  Widget _buildTabItem(String title, {required bool isSelected, required VoidCallback onTap}) {
+  Widget _buildTabItem(
+    String title, {
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -312,7 +357,9 @@ class _AiReportPageState extends State<AiReportPage> {
           color: isSelected ? AppColors.primaryGreen : Colors.white,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isSelected ? AppColors.primaryGreen : AppColors.userGray.withOpacity(0.5),
+            color: isSelected
+                ? AppColors.primaryGreen
+                : AppColors.userGray.withOpacity(0.5),
             width: 1,
           ),
         ),
@@ -334,7 +381,11 @@ class _AiReportPageState extends State<AiReportPage> {
 
   // 一行小型動態來源標籤，證明資料為即時抓取
   Widget _buildMetaLine() {
-    final meta = _statsData?['meta'] ?? _statsData?['Meta'] ?? _statsData?['metadata'] ?? (_statsData?['stats']?['meta']);
+    final meta =
+        _statsData?['meta'] ??
+        _statsData?['Meta'] ??
+        _statsData?['metadata'] ??
+        (_statsData?['stats']?['meta']);
     String fetchedAt = '';
     if (meta is Map) {
       final fetched = meta['fetchedAt']?.toString() ?? '';
@@ -346,9 +397,7 @@ class _AiReportPageState extends State<AiReportPage> {
         const SizedBox(width: 6),
         Flexible(
           child: Text(
-            fetchedAt.isNotEmpty
-                ? '最新抓取時間 $fetchedAt'
-                : '正在載入最新資料來源…',
+            fetchedAt.isNotEmpty ? '最新抓取時間 $fetchedAt' : '正在載入最新資料來源…',
             style: const TextStyle(fontSize: 12, color: AppColors.userGray),
             overflow: TextOverflow.ellipsis,
           ),
@@ -359,7 +408,6 @@ class _AiReportPageState extends State<AiReportPage> {
 
   // MARK: Tab 0: 假訊息偵測 (包含 Bar Chart & Topics List)
   Widget _buildDetectionReportContent() {
-
     // 週報數據: Bar Chart
     final List<BarData> weeklyData = _reportData[0]?['chart_data'];
 
@@ -369,9 +417,9 @@ class _AiReportPageState extends State<AiReportPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 1. 近七天假訊息監測報告 (Bar Chart)
+        // 1. 本週假訊息監測報告 (Bar Chart)
         _buildVisualCard(
-          title: '近七天假訊息監測報告',
+          title: '本週假訊息監測報告',
           onViewAll: () => _showFullReportModal(),
           child: AiBarChart(data: weeklyData),
         ),
@@ -389,7 +437,9 @@ class _AiReportPageState extends State<AiReportPage> {
                 ? topCategories.map<Widget>((cat) {
                     final name = cat['name']?.toString() ?? '';
                     final percent = cat['percentage']?.toString() ?? '';
-                    final color = (cat['percentage'] is num && (cat['percentage'] as num) >= 30)
+                    final color =
+                        (cat['percentage'] is num &&
+                            (cat['percentage'] as num) >= 30)
                         ? AppColors.dangerRed
                         : AppColors.primaryGreen;
                     return Padding(
@@ -408,7 +458,10 @@ class _AiReportPageState extends State<AiReportPage> {
                           Expanded(
                             child: Text(
                               name,
-                              style: const TextStyle(fontSize: 16, color: AppColors.darkText),
+                              style: const TextStyle(
+                                fontSize: 16,
+                                color: AppColors.darkText,
+                              ),
                             ),
                           ),
                           Text(
@@ -423,7 +476,12 @@ class _AiReportPageState extends State<AiReportPage> {
                       ),
                     );
                   }).toList()
-                : [const Text('（本週無顯著主題）', style: TextStyle(color: AppColors.userGray))],
+                : [
+                    const Text(
+                      '（本週無顯著主題）',
+                      style: TextStyle(color: AppColors.userGray),
+                    ),
+                  ],
           ),
         ),
         const SizedBox(height: 20),
@@ -432,7 +490,10 @@ class _AiReportPageState extends State<AiReportPage> {
   }
 
   // 報告區塊標題
-  Widget _buildReportSectionHeader({required String title, required VoidCallback onViewAll}) {
+  Widget _buildReportSectionHeader({
+    required String title,
+    required VoidCallback onViewAll,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10.0),
       child: Text(
@@ -487,10 +548,12 @@ class _AiReportPageState extends State<AiReportPage> {
         : ((lastV + lastS) > 0 ? ((lastV * 100) / (lastV + lastS)).round() : 0);
 
     // AI 準確率趨勢（近一日 vs 前一日）
-    final prevAcc = (prevV + prevS) > 0 ? ((prevV * 100) / (prevV + prevS)) : aiAcc.toDouble();
+    final prevAcc = (prevV + prevS) > 0
+        ? ((prevV * 100) / (prevV + prevS))
+        : aiAcc.toDouble();
     final aiDelta = (aiAcc - prevAcc).round();
 
-    String fmtDelta(int d) => (d >= 0 ? '+$d% \u25B2' : '${d}% \u25BC');
+    String fmtDelta(int d) => (d >= 0 ? '+$d% \u25B2' : '$d% \u25BC');
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -565,7 +628,10 @@ class _AiReportPageState extends State<AiReportPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildReportSectionHeader(title: title, onViewAll: onViewAll ?? () {}),
+          _buildReportSectionHeader(
+            title: title,
+            onViewAll: onViewAll ?? () {},
+          ),
           if (child != null) child,
         ],
       ),
@@ -632,10 +698,7 @@ class _MetricCard extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               label,
-              style: const TextStyle(
-                fontSize: 12,
-                color: AppColors.darkText,
-              ),
+              style: const TextStyle(fontSize: 12, color: AppColors.darkText),
             ),
             const SizedBox(height: 4),
             Text(
@@ -697,7 +760,6 @@ class _TopicListItem extends StatelessWidget {
   }
 }
 
-
 // MARK: - 圖表繪製器 (Custom Charts)
 
 /// 柱狀圖 Widget (用於 Tab 0: 假訊息偵測週報)
@@ -725,7 +787,9 @@ class _AiBarChartState extends State<AiBarChart> {
           final localPosition = renderBox.globalToLocal(details.globalPosition);
 
           final double barWidth = 15.0;
-          final double spacing = (renderBox.size.width - (widget.data.length * barWidth)) / (widget.data.length + 1);
+          final double spacing =
+              (renderBox.size.width - (widget.data.length * barWidth)) /
+              (widget.data.length + 1);
 
           // 判斷點擊了哪個柱體
           int hitIndex = -1;
@@ -766,13 +830,18 @@ class _BarChartPainter extends CustomPainter {
     const double barWidth = 15.0;
     const double barRadius = 4.0;
     const double padding = 10.0;
-    final double maxValue = data.map((d) => d.total).reduce((a, b) => a > b ? a : b);
-    final double spacing = (size.width - (data.length * barWidth)) / (data.length + 1);
+    final double maxValue = data
+        .map((d) => d.total)
+        .reduce((a, b) => a > b ? a : b);
+    final double spacing =
+        (size.width - (data.length * barWidth)) / (data.length + 1);
 
     for (int i = 0; i < data.length; i++) {
       final item = data[i];
-      final double verifiedHeight = (item.verified / maxValue) * (size.height - padding * 2);
-      final double suspiciousHeight = (item.suspicious / maxValue) * (size.height - padding * 2);
+      final double verifiedHeight =
+          (item.verified / maxValue) * (size.height - padding * 2);
+      final double suspiciousHeight =
+          (item.suspicious / maxValue) * (size.height - padding * 2);
       final double totalHeight = verifiedHeight + suspiciousHeight;
 
       // X 軸位置
@@ -819,7 +888,10 @@ class _BarChartPainter extends CustomPainter {
         textDirection: TextDirection.ltr,
       );
       textPainterLabel.layout();
-      textPainterLabel.paint(canvas, Offset(xCenter - textPainterLabel.width / 2, size.height - padding + 5));
+      textPainterLabel.paint(
+        canvas,
+        Offset(xCenter - textPainterLabel.width / 2, size.height - padding + 5),
+      );
 
       // 點擊後顯示數值
       if (i == tappedIndex) {
@@ -838,16 +910,19 @@ class _BarChartPainter extends CustomPainter {
         // 數值顯示在柱體頂部上方
         textPainterValue.paint(
           canvas,
-          Offset(xCenter - textPainterValue.width / 2, size.height - padding - totalHeight - textPainterValue.height - 5),
+          Offset(
+            xCenter - textPainterValue.width / 2,
+            size.height - padding - totalHeight - textPainterValue.height - 5,
+          ),
         );
       }
     }
   }
 
   @override
-  bool shouldRepaint(covariant _BarChartPainter oldDelegate) => oldDelegate.tappedIndex != tappedIndex;
+  bool shouldRepaint(covariant _BarChartPainter oldDelegate) =>
+      oldDelegate.tappedIndex != tappedIndex;
 }
-
 
 // 圓餅圖/環狀圖 數據繪製器 (簡化版)
 class _PieChartPainter extends CustomPainter {
@@ -901,9 +976,7 @@ class AiPieChart extends StatelessWidget {
           SizedBox(
             width: 150,
             height: 150,
-            child: CustomPaint(
-              painter: _PieChartPainter(data),
-            ),
+            child: CustomPaint(painter: _PieChartPainter(data)),
           ),
           const SizedBox(width: 10),
           Column(
@@ -926,7 +999,10 @@ class AiPieChart extends StatelessWidget {
                     const SizedBox(width: 8),
                     Text(
                       '${d.label}: ${d.value.round()}%',
-                      style: const TextStyle(fontSize: 14, color: AppColors.darkText),
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: AppColors.darkText,
+                      ),
                     ),
                   ],
                 ),
@@ -951,9 +1027,7 @@ class AiLineChart extends StatelessWidget {
     return SizedBox(
       height: 150,
       width: double.infinity,
-      child: CustomPaint(
-        painter: _LineChartPainter(data, color),
-      ),
+      child: CustomPaint(painter: _LineChartPainter(data, color)),
     );
   }
 }
@@ -982,14 +1056,21 @@ class _LineChartPainter extends CustomPainter {
     final gridPaint = Paint()
       ..color = AppColors.userGray.withOpacity(0.3)
       ..strokeWidth = 0.5;
-    canvas.drawLine(Offset(0, size.height - padding), Offset(size.width, size.height - padding), gridPaint);
+    canvas.drawLine(
+      Offset(0, size.height - padding),
+      Offset(size.width, size.height - padding),
+      gridPaint,
+    );
     canvas.drawLine(Offset(0, padding), Offset(size.width, padding), gridPaint);
 
     // 繪製數據線
     for (int i = 0; i < data.length; i++) {
       final double x = i * stepX;
       // 將 Y 軸縮放並反轉 (越高值越靠近頂部)
-      final double y = size.height - padding - ((data[i] / maxValue) * (size.height - 2 * padding));
+      final double y =
+          size.height -
+          padding -
+          ((data[i] / maxValue) * (size.height - 2 * padding));
 
       if (i == 0) {
         path.moveTo(x, y);
@@ -998,7 +1079,13 @@ class _LineChartPainter extends CustomPainter {
       }
 
       // 繪製數據點
-      canvas.drawCircle(Offset(x, y), 3.0, Paint()..color = color..style = PaintingStyle.fill);
+      canvas.drawCircle(
+        Offset(x, y),
+        3.0,
+        Paint()
+          ..color = color
+          ..style = PaintingStyle.fill,
+      );
     }
     canvas.drawPath(path, paint);
 
@@ -1006,12 +1093,15 @@ class _LineChartPainter extends CustomPainter {
     final textPainter = TextPainter(textDirection: TextDirection.ltr);
     const List<String> labels = ['一', '二', '三', '四', '五', '六', '日'];
     for (int i = 0; i < data.length; i++) {
-        textPainter.text = TextSpan(
-          text: labels[i],
-          style: const TextStyle(color: AppColors.userGray, fontSize: 10),
-        );
-        textPainter.layout();
-        textPainter.paint(canvas, Offset(i * stepX - textPainter.width / 2, size.height));
+      textPainter.text = TextSpan(
+        text: labels[i],
+        style: const TextStyle(color: AppColors.userGray, fontSize: 10),
+      );
+      textPainter.layout();
+      textPainter.paint(
+        canvas,
+        Offset(i * stepX - textPainter.width / 2, size.height),
+      );
     }
   }
 
@@ -1020,7 +1110,6 @@ class _LineChartPainter extends CustomPainter {
     return true;
   }
 }
-
 
 /// 模擬完整報告 Modal (只保留假訊息偵測分頁)
 class FullReportModal extends StatefulWidget {
@@ -1080,8 +1169,12 @@ class _FullReportModalState extends State<FullReportModal> {
         final weekly = (t['weeklyReports'] as List<dynamic>? ?? []);
         chartData = weekly.map((r) {
           final day = r['day']?.toString() ?? '';
-          final verified = (r['verified'] is num) ? (r['verified'] as num).toDouble() : 0.0;
-          final suspicious = (r['suspicious'] is num) ? (r['suspicious'] as num).toDouble() : 0.0;
+          final verified = (r['verified'] is num)
+              ? (r['verified'] as num).toDouble()
+              : 0.0;
+          final suspicious = (r['suspicious'] is num)
+              ? (r['suspicious'] as num).toDouble()
+              : 0.0;
           return BarData(verified, suspicious, day);
         }).toList();
       } else if (chartType == 'line') {
@@ -1091,7 +1184,9 @@ class _FullReportModalState extends State<FullReportModal> {
         final channels = (t['channels'] as List<dynamic>? ?? []);
         chartData = channels.map<ChartData>((c) {
           final label = c['channel']?.toString() ?? '';
-          final percent = (c['percentage'] is num) ? (c['percentage'] as num).toDouble() : 0.0;
+          final percent = (c['percentage'] is num)
+              ? (c['percentage'] as num).toDouble()
+              : 0.0;
           Color color;
           if (label.contains('社群')) {
             color = AppColors.dangerRed;
@@ -1126,7 +1221,13 @@ class _FullReportModalState extends State<FullReportModal> {
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
       appBar: AppBar(
-        title: const Text('完整報告', style: TextStyle(color: AppColors.darkText, fontWeight: FontWeight.bold)),
+        title: const Text(
+          '完整報告',
+          style: TextStyle(
+            color: AppColors.darkText,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         centerTitle: true,
         backgroundColor: Colors.white,
         foregroundColor: AppColors.darkText,
@@ -1137,16 +1238,18 @@ class _FullReportModalState extends State<FullReportModal> {
         ),
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator(color: AppColors.primaryGreen))
+          ? const Center(
+              child: CircularProgressIndicator(color: AppColors.primaryGreen),
+            )
           : _report != null && _report!.containsKey(0)
-              ? _buildReportTabView(
-                  title: _report![0]!['title'],
-                  content: _report![0]!['content'],
-                  chartData: _report![0]!['chart_data'],
-                  chartType: _report![0]!['chart_type'],
-                  meta: (_report![0]!['meta'] as Map<String, dynamic>?),
-                )
-              : const Center(child: Text('無法載入報告')),
+          ? _buildReportTabView(
+              title: _report![0]!['title'],
+              content: _report![0]!['content'],
+              chartData: _report![0]!['chart_data'],
+              chartType: _report![0]!['chart_type'],
+              meta: (_report![0]!['meta'] as Map<String, dynamic>?),
+            )
+          : const Center(child: Text('無法載入報告')),
     );
   }
 
@@ -1164,13 +1267,19 @@ class _FullReportModalState extends State<FullReportModal> {
         chartWidget = AiBarChart(data: chartData as List<BarData>);
         break;
       case 'line':
-        chartWidget = AiLineChart(data: chartData as List<double>, color: AppColors.primaryGreen2);
+        chartWidget = AiLineChart(
+          data: chartData as List<double>,
+          color: AppColors.primaryGreen2,
+        );
         break;
       case 'pie':
         chartWidget = AiPieChart(data: chartData as List<ChartData>);
         break;
       default:
-        chartWidget = const SizedBox(height: 150, child: Center(child: Text('圖表類型錯誤')));
+        chartWidget = const SizedBox(
+          height: 150,
+          child: Center(child: Text('圖表類型錯誤')),
+        );
     }
 
     return SingleChildScrollView(
@@ -1195,7 +1304,11 @@ class _FullReportModalState extends State<FullReportModal> {
           const SizedBox(height: 10),
           Text(
             title,
-            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.darkText),
+            style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: AppColors.darkText,
+            ),
           ),
           const SizedBox(height: 20),
 
@@ -1205,7 +1318,9 @@ class _FullReportModalState extends State<FullReportModal> {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(12),
-              boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 5)],
+              boxShadow: [
+                BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 5),
+              ],
             ),
             child: chartWidget,
           ),
@@ -1230,7 +1345,11 @@ class _FullReportModalState extends State<FullReportModal> {
             padding: const EdgeInsets.only(top: 10.0, bottom: 4.0),
             child: Text(
               line.replaceAll('**', ''), // 移除 **
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.darkText),
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: AppColors.darkText,
+              ),
             ),
           );
         } else if (line.startsWith('*')) {
@@ -1244,7 +1363,9 @@ class _FullReportModalState extends State<FullReportModal> {
               TextSpan(
                 text: parts[i],
                 style: TextStyle(
-                  fontWeight: i % 2 != 0 ? FontWeight.bold : FontWeight.normal, // 奇數索引為粗體
+                  fontWeight: i % 2 != 0
+                      ? FontWeight.bold
+                      : FontWeight.normal, // 奇數索引為粗體
                   color: AppColors.textColor,
                 ),
               ),
@@ -1256,12 +1377,19 @@ class _FullReportModalState extends State<FullReportModal> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('\u2022 ', style: TextStyle(fontSize: 18, color: AppColors.primaryGreen)),
+                const Text(
+                  '\u2022 ',
+                  style: TextStyle(fontSize: 18, color: AppColors.primaryGreen),
+                ),
                 Expanded(
                   child: RichText(
                     text: TextSpan(
                       children: spans,
-                      style: const TextStyle(fontSize: 16, height: 1.8, color: AppColors.textColor),
+                      style: const TextStyle(
+                        fontSize: 16,
+                        height: 1.8,
+                        color: AppColors.textColor,
+                      ),
                     ),
                   ),
                 ),
@@ -1290,7 +1418,11 @@ class _FullReportModalState extends State<FullReportModal> {
             child: RichText(
               text: TextSpan(
                 children: spans,
-                style: const TextStyle(fontSize: 16, height: 1.5, color: AppColors.textColor),
+                style: const TextStyle(
+                  fontSize: 16,
+                  height: 1.5,
+                  color: AppColors.textColor,
+                ),
               ),
             ),
           );

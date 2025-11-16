@@ -12,6 +12,9 @@ from typing import List, Dict, Tuple, Optional
 import numpy as np
 import lightgbm as lgb
 from pathlib import Path
+import psycopg2
+from psycopg2 import sql
+
 # optional imports for external services
 try:
     from duckduckgo_search import DDGS
@@ -45,6 +48,59 @@ SERPAPI_API_KEY = "d74cf3f39503404c0426005f0c23cc59246f60084b198b8dcbee955b04448
 
 # ⚠️ Gemini API 金鑰 (用於 LLM 深度分析，請務必替換！)
 GEMINI_API_KEY = "AIzaSyBZoPr5y8AM3c9VcM5ahIAqfw0ODtRAtQk"
+
+# === 新增：資料庫設定 ===
+DB_CONFIG = {
+    "host": "localhost",
+    "port": 5432,
+    "dbname": "truthliesdetector",
+    "user": "postgres",
+    "password": "1234",
+}
+
+# === 新增：寫入資料庫的函式 ===
+def insert_article_to_db(
+    *,
+    title: str,
+    content: str,
+    category: Optional[str],
+    source_link: Optional[str],
+    media_name: Optional[str],
+    reliability_score: Optional[int],
+    published_time: Optional[str] = None,
+) -> None:
+    """
+    將分析結果寫入資料表 public.articles
+    未抓到的欄位可用 None
+    """
+    try:
+        conn = psycopg2.connect(**DB_CONFIG)
+        cur = conn.cursor()
+        insert_sql = """
+            INSERT INTO public.articles
+                (title, content, category, source_link, media_name, created_time, published_time, reliability_score)
+            VALUES
+                (%s, %s, %s, %s, %s, NOW(), %s, %s)
+            ON CONFLICT (source_link)
+            DO UPDATE SET
+                reliability_score = EXCLUDED.reliability_score,
+                title = EXCLUDED.title,
+                content = EXCLUDED.content,
+                media_name = EXCLUDED.media_name,
+                published_time = EXCLUDED.published_time,
+                created_time = NOW();
+        """
+        print(f"📦 DB Insert Score: {reliability_score}")
+
+        cur.execute(insert_sql, (
+            title, content, category, source_link, media_name, published_time, reliability_score
+        ))
+        conn.commit()
+        cur.close()
+        conn.close()
+        print(f"📝 已寫入資料庫：{(title or '')[:30]}... (score={reliability_score})")
+    except Exception as e:
+        print(f"❌ 寫入資料庫失敗：{e}")
 
 # ==============================================================================
 # II. 內容擷取與預處理模組 (Extraction & Preprocessing) (略，與上一版相同)
@@ -572,25 +628,41 @@ def run_analysis_system():
             feats_ann, short = analyzer.annotate_features(it['title'], it['content'], it['url'])
             it['ann_features'] = feats_ann
             it['short_judgement'] = short
+            # === 修改後：用模型輸出的 model_score ===
+
             if booster is not None:
-                # convert to numpy vector in same order as model expects
                 feat_order = [
-                    "source_entity_score","domain_score","title_body_consistency","evidence_quality","ad_promo_intensity","hyperbole_score","emotive_clickbait_density","title_body_embedding_cosine"
+                    "source_entity_score","domain_score","title_body_consistency",
+                    "evidence_quality","ad_promo_intensity","hyperbole_score",
+                    "emotive_clickbait_density","title_body_embedding_cosine"
                 ]
                 x = np.array([feats_ann.get(k, 0.0) for k in feat_order], dtype=float).reshape(1, -1)
                 try:
                     proba = booster.predict(x, num_iteration=booster.best_iteration or None)
-                    pred = int(np.argmax(proba, axis=1)[0])
+                    pred = int(np.argmax(proba, axis=1)[0]) + 1  # ✅ 修正：分類結果 +1
                     it['model_score'] = int(pred)
                     it['model_proba'] = proba[0].tolist()
                 except Exception as e:
-                    it['model_score'] = None
+                    it['model_score'] = 0
                     it['model_proba'] = []
+
+            # ✅ 無論成功或錯誤都寫入資料庫
+            reliability_int = int(it.get('model_score') or 0)
+            print(f"🧠 Debug: model_score={it.get('model_score')}  reliability_int={int(it.get('model_score') or 0)}")
+
+            insert_article_to_db(
+                title=it['title'] or '',
+                content=it['content'] or '',
+                category=None,
+                source_link=it.get('url'),
+                media_name=it.get('domain'),
+                reliability_score=reliability_int,
+                published_time=None,
+            )
+
             enriched.append(it)
 
         output_content = json.dumps({'mode': 'URL', 'items': enriched}, ensure_ascii=False, indent=2)
-
-        output_content = json.dumps({'mode': 'URL', 'items': output_items}, ensure_ascii=False, indent=2)
         print("\n[OK] 單一網址擷取完成，輸出 JSON：\n")
         print(output_content)
         # 存檔改為執行結束時統一寫入（見程式尾端）
@@ -651,6 +723,18 @@ def run_analysis_system():
                     except Exception as e:
                         entry['model_score'] = None
                         entry['model_proba'] = []
+
+                    # === 新增：把每篇結果寫入資料庫 ===
+                reliability_int = int(entry.get('model_score') or 0)  # 預設為 0
+                insert_article_to_db(
+                    title=title or '',
+                    content=content or '',
+                    category=user_input,
+                    source_link=url,
+                    media_name=domain,
+                    reliability_score=reliability_int,
+                    published_time=None,
+                )
 
                 items.append(entry)
 

@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../services/api_service.dart';
 import 'dart:convert';
+import 'package:http/http.dart' as http;
+
+// ✅ 改成你 Flask 後端的實際網址
+const String baseUrl = 'http://10.0.2.2:5000';
 
 class SettingsPage extends StatefulWidget {
   static const route = '/settings';
@@ -28,21 +31,100 @@ class _SettingsPageState extends State<SettingsPage> {
   bool isLoading = true;
   int? userId;
 
-  // 顯示小視窗方法（新增勾選框功能）
-  void _showInfoDialog(BuildContext context, String title, String content,
-      {bool requireAgreement = false}) {
+  @override
+  void initState() {
+    super.initState();
+    _loadUserSettings();
+  }
+
+  /// 從 Flask 後端取得使用者設定
+  Future<void> _loadUserSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    userId = prefs.getInt('user_id');
+    if (userId == null) {
+      setState(() => isLoading = false);
+      return;
+    }
+
+    try {
+      final url = Uri.parse('$baseUrl/api/settings/$userId');
+      final resp = await http.get(url);
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body);
+        setState(() {
+          newsSubscription = data['news_category_subscription'] ?? false;
+          expertAnalysisSubscription =
+              data['expert_analysis_subscription'] ?? false;
+          reportSubscription = data['weekly_report_subscription'] ?? false;
+          forecastNotification = data['fake_news_alert'] ?? false;
+          hotTopicNotification = data['trending_topic_alert'] ?? false;
+          expertReplyNotification = data['expert_response_alert'] ?? false;
+          hasAgreedPrivacyPolicy = data['privacy_policy_agreed'] ?? false;
+          isLoading = false;
+        });
+      } else {
+        print('❌ 載入設定失敗: ${resp.statusCode}');
+        setState(() => isLoading = false);
+      }
+    } catch (e) {
+      print('❌ 無法連線後端: $e');
+      setState(() => isLoading = false);
+    }
+  }
+
+  /// 更新設定到後端
+  Future<void> _updateSettings() async {
+    if (userId == null) return;
+    final url = Uri.parse('$baseUrl/api/settings/$userId');
+
+    final body = {
+      'news_category_subscription': newsSubscription,
+      'expert_analysis_subscription': expertAnalysisSubscription,
+      'weekly_report_subscription': reportSubscription,
+      'fake_news_alert': forecastNotification,
+      'trending_topic_alert': hotTopicNotification,
+      'expert_response_alert': expertReplyNotification,
+      'privacy_policy_agreed': hasAgreedPrivacyPolicy,
+    };
+
+    try {
+      final resp = await http.put(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(body),
+      );
+
+      if (resp.statusCode == 200) {
+        print('✅ 設定已更新');
+      } else {
+        print('❌ 更新失敗: ${resp.statusCode}');
+      }
+    } catch (e) {
+      print('❌ 錯誤: $e');
+    }
+  }
+
+  /// 顯示小視窗方法（含勾選框）
+  void _showInfoDialog(
+    BuildContext context,
+    String title,
+    String content, {
+    bool requireAgreement = false,
+  }) {
     bool agreed = hasAgreedPrivacyPolicy;
 
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
-        builder: (context, setState) {
+        builder: (context, setStateDialog) {
           return AlertDialog(
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
             ),
-            title: Text(title,
-                style: const TextStyle(fontWeight: FontWeight.bold)),
+            title: Text(
+              title,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -54,18 +136,17 @@ class _SettingsPageState extends State<SettingsPage> {
                       Checkbox(
                         value: agreed,
                         onChanged: (val) {
-                          setState(() {
+                          setStateDialog(() {
                             agreed = val ?? false;
                             if (agreed) {
-                              hasAgreedPrivacyPolicy = true;
-                              // 同步到後端
+                              this.hasAgreedPrivacyPolicy = true;
                               _updateSettings();
-                              Navigator.pop(context); // 勾選後自動關閉
+                              Navigator.pop(context);
                             }
                           });
                         },
-                        activeColor: const Color(0xFF8BA88E), // 勾勾顏色
-                        checkColor: Colors.white, // 勾號顏色
+                        activeColor: const Color(0xFF8BA88E),
+                        checkColor: Colors.white,
                       ),
                       const SizedBox(width: 8),
                       const Expanded(child: Text("我已閱讀並同意")),
@@ -88,64 +169,6 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   @override
-  void initState() {
-    super.initState();
-    _loadUserSettings();
-  }
-
-  Future<void> _loadUserSettings() async {
-    setState(() => isLoading = true);
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      userId = prefs.getInt('user_id');
-      if (userId == null) {
-        setState(() => isLoading = false);
-        return;
-      }
-
-      final api = ApiService.getInstance();
-      final data = await api.getUserSettings(userId!);
-      if (data != null) {
-        setState(() {
-          newsSubscription = data['news_category_subscription'] ?? false;
-          expertAnalysisSubscription = data['expert_analysis_subscription'] ?? false;
-          reportSubscription = data['weekly_report_subscription'] ?? false;
-          forecastNotification = data['fake_news_alert'] ?? false;
-          hotTopicNotification = data['trending_topic_alert'] ?? false;
-          expertReplyNotification = data['expert_response_alert'] ?? false;
-          hasAgreedPrivacyPolicy = data['privacy_policy_agreed'] ?? false;
-        });
-      }
-    } catch (e) {
-      print('載入使用者設定失敗: $e');
-    } finally {
-      setState(() => isLoading = false);
-    }
-  }
-
-  Future<void> _updateSettings() async {
-    if (userId == null) return;
-    final api = ApiService.getInstance();
-    final body = {
-      'news_category_subscription': newsSubscription,
-      'expert_analysis_subscription': expertAnalysisSubscription,
-      'weekly_report_subscription': reportSubscription,
-      'fake_news_alert': forecastNotification,
-      'trending_topic_alert': hotTopicNotification,
-      'expert_response_alert': expertReplyNotification,
-      'privacy_policy_agreed': hasAgreedPrivacyPolicy,
-    };
-    try {
-      final ok = await api.updateUserSettings(userId!, body);
-      if (!ok) {
-        print('更新設定失敗');
-      }
-    } catch (e) {
-      print('更新設定時發生錯誤: $e');
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
     if (isLoading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
@@ -154,13 +177,11 @@ class _SettingsPageState extends State<SettingsPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text("設定與通知"),
-        backgroundColor: const Color(0xFF9EB79E), // 淡綠色
+        backgroundColor: const Color(0xFF9EB79E),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios),
           color: Colors.white,
-          onPressed: () {
-            Navigator.pop(context); // 返回上一頁
-          },
+          onPressed: () => Navigator.pop(context),
         ),
       ),
       body: ListView(
@@ -281,7 +302,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     _showInfoDialog(
                       context,
                       "帳號安全",
-                      "為保障您的帳號安全，我們建議您定期更換密碼並啟用雙重驗證。本應用程式將依照您選擇的安全機制進行保護，但您仍需妥善保管登入資訊，避免外洩或在不安全環境下登入。啟用相關功能，即表示您理解並同意遵循上述安全建議。",
+                      "為保障您的帳號安全，我們建議您定期更換密碼並啟用雙重驗證。本應用程式將依照您選擇的安全機制進行保護，但您仍需妥善保管登入資訊。",
                     );
                   },
                 ),
@@ -294,8 +315,8 @@ class _SettingsPageState extends State<SettingsPage> {
                     _showInfoDialog(
                       context,
                       "隱私政策",
-                      "本應用程式重視您的隱私，為提供新聞查核及個人化服務，我們可能會蒐集與使用您的使用紀錄、偏好設定及匿名化資訊，並僅於必要範圍內進行分析與改善服務。我們不會出售、交換或未經授權將您的個人資料提供給第三方，請您在使用前仔細閱讀本隱私政策並確認同意。",
-                      requireAgreement: true, // 勾選框
+                      "本應用程式重視您的隱私，為提供新聞查核及個人化服務，我們可能會蒐集與使用您的使用紀錄、偏好設定及匿名化資訊，並僅於必要範圍內進行分析與改善服務。",
+                      requireAgreement: true,
                     );
                   },
                 ),

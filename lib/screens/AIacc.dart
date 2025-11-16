@@ -66,7 +66,10 @@ class _AIaccState extends State<AIacc> with RouteAware {
       routeObserver.unsubscribe(this);
       if (_userListenerAttached) {
         try {
-          final userProvider = Provider.of<UserProvider>(context, listen: false);
+          final userProvider = Provider.of<UserProvider>(
+            context,
+            listen: false,
+          );
           userProvider.removeListener(_onUserChanged);
         } catch (_) {}
         _userListenerAttached = false;
@@ -125,7 +128,10 @@ class _AIaccState extends State<AIacc> with RouteAware {
           };
         }).toList();
 
-        if (mounted) setState(() => _historyQueries = List<Map<String, dynamic>>.from(mapped));
+        if (mounted)
+          setState(
+            () => _historyQueries = List<Map<String, dynamic>>.from(mapped),
+          );
       } else {
         print('歷史查詢 API 回應錯誤: ${resp.statusCode} ${resp.body}');
       }
@@ -171,9 +177,7 @@ class _AIaccState extends State<AIacc> with RouteAware {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => AIchat(
-          initialQuery: messageToSend,
-        ),
+        builder: (context) => AIchat(initialQuery: messageToSend),
       ),
     );
 
@@ -313,7 +317,10 @@ class _AIaccState extends State<AIacc> with RouteAware {
                   // ✅ 上傳檔案區域
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 10),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 15,
+                      horizontal: 10,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(10),
@@ -371,7 +378,10 @@ class _AIaccState extends State<AIacc> with RouteAware {
                       ),
                       child: const Text(
                         '立即查證',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ),
@@ -399,7 +409,10 @@ class _AIaccState extends State<AIacc> with RouteAware {
                           children: [
                             const Text(
                               '歷史查詢',
-                              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                             TextButton(
                               onPressed: () {
@@ -416,13 +429,18 @@ class _AIaccState extends State<AIacc> with RouteAware {
                         ListView.builder(
                           shrinkWrap: true,
                           physics: const NeverScrollableScrollPhysics(),
-                          itemCount: _expandedHistory ? _historyQueries.length : (_historyQueries.length > 3 ? 3 : _historyQueries.length),
+                          itemCount: _expandedHistory
+                              ? _historyQueries.length
+                              : (_historyQueries.length > 3
+                                    ? 3
+                                    : _historyQueries.length),
                           itemBuilder: (context, index) {
                             final query = _historyQueries[index];
                             final title = (query['title'] ?? '').toString();
                             final status = (query['status'] ?? '').toString();
                             final time = (query['time'] ?? '').toString();
-                            final confidence = (query['confidence'] ?? '').toString();
+                            final confidence = (query['confidence'] ?? '')
+                                .toString();
                             return InkWell(
                               onTap: () {
                                 // navigate to detail page showing full previous chat
@@ -431,7 +449,9 @@ class _AIaccState extends State<AIacc> with RouteAware {
                                   MaterialPageRoute(
                                     builder: (_) => ChatDetailPage(
                                       query: query['query_full'] ?? title,
-                                      geminiResult: Map<String, dynamic>.from(query['gemini'] ?? {}),
+                                      geminiResult: Map<String, dynamic>.from(
+                                        query['gemini'] ?? {},
+                                      ),
                                       createdAt: query['created_at'] ?? time,
                                     ),
                                   ),
@@ -446,40 +466,58 @@ class _AIaccState extends State<AIacc> with RouteAware {
                                 child: Padding(
                                   padding: const EdgeInsets.all(15.0),
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         title,
-                                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                                        style: const TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w500,
+                                        ),
                                       ),
                                       const SizedBox(height: 8),
                                       Row(
-                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
                                         children: [
                                           Row(
                                             children: [
                                               Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 8,
+                                                      vertical: 4,
+                                                    ),
                                                 decoration: BoxDecoration(
                                                   color: AppColors.primaryGreen,
-                                                  borderRadius: BorderRadius.circular(5),
+                                                  borderRadius:
+                                                      BorderRadius.circular(5),
                                                 ),
                                                 child: Text(
                                                   status,
-                                                  style: const TextStyle(color: Colors.black54, fontSize: 12),
+                                                  style: const TextStyle(
+                                                    color: Colors.black54,
+                                                    fontSize: 12,
+                                                  ),
                                                 ),
                                               ),
                                               const SizedBox(width: 8),
                                               Text(
                                                 time,
-                                                style: const TextStyle(color: Colors.grey, fontSize: 12),
+                                                style: const TextStyle(
+                                                  color: Colors.grey,
+                                                  fontSize: 12,
+                                                ),
                                               ),
                                             ],
                                           ),
                                           Text(
                                             confidence,
                                             style: TextStyle(
-                                              color: _getConfidenceColor(confidence),
+                                              color: _getConfidenceColor(
+                                                confidence,
+                                              ),
                                               fontSize: 12,
                                               fontWeight: FontWeight.bold,
                                             ),
@@ -497,7 +535,9 @@ class _AIaccState extends State<AIacc> with RouteAware {
                           Align(
                             alignment: Alignment.center,
                             child: TextButton(
-                              onPressed: () => setState(() => _expandedHistory = !_expandedHistory),
+                              onPressed: () => setState(
+                                () => _expandedHistory = !_expandedHistory,
+                              ),
                               child: Text(_expandedHistory ? '顯示較少' : '顯示全部'),
                             ),
                           ),

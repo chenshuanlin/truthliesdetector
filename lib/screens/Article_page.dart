@@ -1,469 +1,285 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:truthliesdetector/themes/app_colors.dart'; // 假設你的 AppColors 在這裡
-import 'package:screenshot/screenshot.dart'; // 導入 Screenshot 套件
-import 'package:truthliesdetector/themes/ball.dart'; // 假設你的 FloatingActionMenu 在這個檔案中
-
-// 這裡只保留 Article 和 Comment 類別，因為它們是 ArticleDetailPage 獨有的資料模型
-// 如果你的專案中有獨立的資料模型檔案，你也可以將它們移過去。
-
-/// 文章資料模型
-class Article {
-  final String title;
-  final String publishDate;
-  final double credibilityScore;
-  final String aiAnalysis;
-  final String content;
-  final List<String> similarNews;
-
-  Article({
-    required this.title,
-    required this.publishDate,
-    required this.credibilityScore,
-    required this.aiAnalysis,
-    required this.content,
-    required this.similarNews,
-  });
-}
-
-/// 評論資料模型
-class Comment {
-  final String authorName;
-  final String content;
-  final bool isExpert;
-
-  Comment({
-    required this.authorName,
-    required this.content,
-    this.isExpert = false,
-  });
-}
+import 'package:http/http.dart' as http;
+import 'package:truthliesdetector/services/api_service.dart';
+import 'package:truthliesdetector/themes/app_colors.dart';
+import 'package:provider/provider.dart';
+import 'package:truthliesdetector/providers/user_provider.dart';
+import 'package:screenshot/screenshot.dart';
 
 class ArticleDetailPage extends StatefulWidget {
-  static const String route = '/article';
+  final int articleId;
 
-  const ArticleDetailPage({super.key});
+  const ArticleDetailPage({super.key, required this.articleId});
 
   @override
   State<ArticleDetailPage> createState() => _ArticleDetailPageState();
 }
 
 class _ArticleDetailPageState extends State<ArticleDetailPage> {
-  // <<< 新增：懸浮球相關狀態變數和控制器
   final ScreenshotController _screenshotController = ScreenshotController();
-  bool _showFab = true;
-  // >>>
-
-  final Article _article = Article(
-    title: "新冠疫苗含有微型晶片追蹤人體活動?",
-    publishDate: "2025-05-20 08:30",
-    credibilityScore: 0.3,
-    aiAnalysis: "依據多項權威資料判斷，該說法屬於錯誤訊息，可信度極低。所謂“疫苗含有微型晶片”，缺乏任何科學依據，專家一致認為這是典型的謠言訊息。",
-    content: "【本報訊】\n\n近期，網傳謠言稱新冠疫苗含有微型晶片可以追蹤人體活動，甚至聲稱疫苗接種卡是一種國際監控工具。...\n\n相關調查顯示，疫苗晶片說法最早出現在部分海外社群媒體，經過轉發和加工，迅速傳入國內，引發恐慌。...\n\n目前國內《疫苗管理法》《傳染病防治法》等均對疫苗管理有明確規範。醫學界強調，接種新冠疫苗的主要目的是預防感染和重症...",
-    similarNews: [
-      "WHO：COVID-19疫苗不含追蹤晶片，此為謠言",
-      "台灣疾管署：疫苗成分公開透明，無追蹤裝置",
-      "科學家解釋：疫苗微晶片說法在技術上不可能實現"
-    ],
-  );
-
-  final List<Comment> _comments = [
-    Comment(
-      authorName: "李醫師（流行病學專家）",
-      content: "疫苗不可能植入晶片，針頭直徑僅0.25~0.5mm，現有晶片技術無法藏於疫苗中且人體無感覺。",
-      isExpert: true,
-    ),
-    Comment(
-      authorName: "張小明",
-      content: "感謝澄清，我差點被親戚帶偏，現在可以安心接種疫苗了。",
-    ),
-  ];
-
   final TextEditingController _commentController = TextEditingController();
+  final TextEditingController _reportController = TextEditingController();
 
-  void _submitComment() {
-    if (_commentController.text.isNotEmpty) {
-      final newComment = Comment(
-        authorName: "匿名用戶",
-        content: _commentController.text,
+  Map<String, dynamic>? _articleData;
+  bool _isLoading = true;
+  final List<Map<String, dynamic>> _comments = [];
+
+  // ⭐ 新增：收藏狀態
+  bool _isFavorited = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchArticleData();
+    _fetchComments();
+    _addViewHistory();
+    _checkFavoriteStatus(); // ⭐ 檢查收藏狀態
+  }
+
+  // ----------------------------
+  // ⭐ 檢查是否已收藏
+  // ----------------------------
+  Future<void> _checkFavoriteStatus() async {
+    try {
+      final api = ApiService.getInstance();
+      final baseUrl = api.baseUrl;
+
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
+      final userId = userProvider.userId;
+      if (userId == null) return;
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/favorites/$userId'),
       );
-      setState(() {
-        _comments.add(newComment);
+
+      if (response.statusCode == 200) {
+        final List data = json.decode(utf8.decode(response.bodyBytes));
+
+        setState(() {
+          _isFavorited = data.any(
+            (item) => item["article_id"] == widget.articleId,
+          );
+        });
+      }
+    } catch (e) {
+      print("❌ 讀取收藏狀態失敗: $e");
+    }
+  }
+
+  // ----------------------------
+  // ⭐ 新增/取消收藏
+  // ----------------------------
+  Future<void> _toggleFavorite() async {
+    try {
+      final api = ApiService.getInstance();
+      final baseUrl = api.baseUrl;
+
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
+      final userId = userProvider.userId;
+
+      if (userId == null) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text("請先登入才能收藏")));
+        return;
+      }
+
+      if (_isFavorited) {
+        // ---- 取消收藏 ----
+        final response = await http.delete(
+          Uri.parse('$baseUrl/api/favorites'),
+          headers: {'Content-Type': 'application/json'},
+          body: json.encode({
+            "user_id": userId,
+            "article_id": widget.articleId,
+          }),
+        );
+
+        if (response.statusCode == 200) {
+          setState(() => _isFavorited = false);
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text("已取消收藏")));
+        }
+      } else {
+        // ---- 新增收藏 ----
+        final response = await http.post(
+          Uri.parse('$baseUrl/api/favorites'),
+          headers: {'Content-Type': 'application/json'},
+          body: json.encode({
+            "user_id": userId,
+            "article_id": widget.articleId,
+          }),
+        );
+
+        if (response.statusCode == 201 || response.statusCode == 409) {
+          setState(() => _isFavorited = true);
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text("已加入收藏")));
+        }
+      }
+    } catch (e) {
+      print("❌ 收藏操作錯誤: $e");
+    }
+  }
+
+  // ----------------------------
+  // 新增瀏覽紀錄
+  // ----------------------------
+  Future<void> _addViewHistory() async {
+    try {
+      final api = ApiService.getInstance();
+      final baseUrl = api.baseUrl;
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
+      final userId = userProvider.userId;
+      if (userId == null) return;
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/search-logs'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({"user_id": userId, "article_id": widget.articleId}),
+      );
+      print("📌 回應瀏覽紀錄：${response.body}");
+    } catch (e) {
+      print("❌ 新增瀏覽紀錄失敗: $e");
+    }
+  }
+
+  // ----------------------------
+  // 取得文章資料
+  // ----------------------------
+  Future<void> _fetchArticleData() async {
+    try {
+      final api = ApiService.getInstance();
+      final baseUrl = api.baseUrl;
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/articles/${widget.articleId}'),
+      );
+      if (response.statusCode == 200) {
+        final data = json.decode(utf8.decode(response.bodyBytes));
+        setState(() => _articleData = data);
+      } else {
+        print("⚠️ 無法載入文章");
+      }
+    } catch (e) {
+      print("❌ 取得文章失敗: $e");
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  // ----------------------------
+  // 取得留言
+  // ----------------------------
+  Future<void> _fetchComments() async {
+    try {
+      final api = ApiService.getInstance();
+      final baseUrl = api.baseUrl;
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/articles/${widget.articleId}/comments'),
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(utf8.decode(response.bodyBytes));
+
+        setState(() {
+          _comments
+            ..clear()
+            ..addAll(
+              (data as List).map((e) => Map<String, dynamic>.from(e)).toList(),
+            );
+        });
+      } else {
+        print('⚠️ 無法載入留言: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('❌ 載入留言失敗: $e');
+    }
+  }
+
+  // ----------------------------
+  // 新增留言
+  // ----------------------------
+  Future<void> _submitComment() async {
+    final content = _commentController.text.trim();
+    if (content.isEmpty) return;
+
+    try {
+      final api = ApiService.getInstance();
+      final baseUrl = api.baseUrl;
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
+      final userId = userProvider.userId;
+      final username = userProvider.username ?? "匿名用戶";
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/articles/${widget.articleId}/comments'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          "author": username,
+          "user_id": userId,
+          "content": content,
+        }),
+      );
+
+      if (response.statusCode == 201) {
         _commentController.clear();
-      });
+        await _fetchComments();
+      } else {
+        print("⚠️ 留言失敗: ${response.body}");
+      }
+    } catch (e) {
+      print("❌ 發送留言錯誤: $e");
     }
   }
 
-  @override
-  void dispose() {
-    _commentController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.grey[100],
-      appBar: AppBar(
-        backgroundColor: AppColors.primaryGreen,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          "文章詳情",
-          style: TextStyle(color: Colors.white, fontSize: 18),
-        ),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: Container(
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white24,
-              ),
-              padding: const EdgeInsets.all(6),
-              child: const Icon(Icons.error_outline, color: Colors.white, size: 20),
-            ),
-            onPressed: () {
-              showDialog(
-                context: context,
-                builder: (context) => _buildReportDialog(context),
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.bookmark_border, color: Colors.white),
-            onPressed: () {
-              // TODO: 收藏功能
-            },
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      // <<< 改變：使用 Stack 包裹 body
-      body: Stack(
-        children: [
-          Screenshot(
-            controller: _screenshotController,
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildTitle(),
-                  const SizedBox(height: 16),
-                  _buildAICard(),
-                  const SizedBox(height: 16),
-                  _buildArticleContent(),
-                  const SizedBox(height: 20),
-                  _buildSimilarNews(),
-                  const SizedBox(height: 20),
-                  _buildCommentSection(),
-                  const SizedBox(height: 80), // 留出空間給懸浮球
-                ],
-              ),
-            ),
-          ),
-          // 根據 _showFab 狀態來顯示或隱藏懸浮球
-          if (_showFab)
-            FloatingActionMenu(
-              screenshotController: _screenshotController,
-              // 因為在文章頁面，懸浮球的功能可能與主頁不同，
-              // 這裡只簡單提供 onClose 回呼函式。
-              // 你可以根據需要為 onTap 傳入導航邏輯。
-              onTap: (int index) {
-                // 例如：處理不同按鈕的導航
-              },
-              onClose: () {
-                setState(() {
-                  _showFab = false;
-                });
-              },
-            ),
-          // 增加一個按鈕來重新顯示懸浮球
-          if (!_showFab)
-            Positioned(
-              bottom: 20,
-              right: 20,
-              child: FloatingActionButton(
-                onPressed: () {
-                  setState(() {
-                    _showFab = true;
-                  });
-                },
-                backgroundColor: AppColors.primaryGreen,
-                child: const Icon(Icons.apps, color: Colors.white),
-              ),
-            ),
-        ],
-      ),
-      // >>>
-    );
-  }
-
-  Widget _buildTitle() {
-    String credibilityText;
-    Color credibilityColor;
-    // 這裡的 credibilityScore 應除以 100 來匹配 0-1 區間
-    // 但你的範例資料是 0.3，所以這裡的邏輯需要調整
-    if (_article.credibilityScore > 0.7) { // 將 70 調整為 0.7
-      credibilityText = "高可信度";
-      credibilityColor = AppColors.deepGreen;
-    } else if (_article.credibilityScore > 0.4) { // 將 40 調整為 0.4
-      credibilityText = "中等可信度";
-      credibilityColor = Colors.orange;
-    } else {
-      credibilityText = "低可信度";
-      credibilityColor = AppColors.dangerRed;
+  // ----------------------------
+  // 舉報文章
+  // ----------------------------
+  Future<void> _submitReport(String reason) async {
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
+    final userId = userProvider.userId;
+    if (userId == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("請先登入才能舉報文章")));
+      return;
     }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          _article.title,
-          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: credibilityColor.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(
-                credibilityText,
-                style: TextStyle(color: credibilityColor, fontSize: 12),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              "發布時間：${_article.publishDate}",
-              style: const TextStyle(fontSize: 12, color: Colors.grey),
-            ),
-          ],
-        ),
-      ],
-    );
+
+    try {
+      final api = "${ApiService.getInstance().baseUrl}/api/reports";
+      final response = await http.post(
+        Uri.parse(api),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          "user_id": userId,
+          "article_id": widget.articleId,
+          "reason": reason,
+        }),
+      );
+      final data = json.decode(response.body);
+      if (response.statusCode == 201 && data['ok'] == true) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text("舉報成功")));
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("舉報失敗：${data['error'] ?? '未知錯誤'}")),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("舉報失敗：$e")));
+    }
   }
 
-  Widget _buildAICard() {
-    return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text("AI可信度分析",
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Text("可信度評分：${_article.credibilityScore}分",
-                    style: const TextStyle(fontSize: 14, color: Colors.black87)),
-                const SizedBox(width: 4),
-                Text("（滿分1分）",
-                    style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-              ],
-            ),
-            const SizedBox(height: 8),
-            LinearProgressIndicator(
-              value: _article.credibilityScore, // 這裡可以直接使用，因為資料是 0-1
-              backgroundColor: Colors.grey[200],
-              valueColor: AlwaysStoppedAnimation<Color>(
-                  _article.credibilityScore > 0.7
-                      ? AppColors.deepGreen
-                      : (_article.credibilityScore > 0.4 ? Colors.orange : AppColors.dangerRed)),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              _article.aiAnalysis,
-              style: const TextStyle(fontSize: 13, color: Colors.black87, height: 1.5),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildArticleContent() {
-    return Text(
-      _article.content,
-      style: const TextStyle(fontSize: 14, height: 1.5),
-    );
-  }
-
-  Widget _buildSimilarNews() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.lightGreenBG,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text("相似新聞比對",
-              style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.deepGreen)),
-          const SizedBox(height: 12),
-          ..._article.similarNews.map((text) => _buildFactItem(text)).toList(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFactItem(String text) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        children: [
-          const Icon(Icons.article_outlined, size: 18, color: Colors.black54),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text(text,
-                style:
-                const TextStyle(fontSize: 13, color: AppColors.darkText)),
-          ),
-          const SizedBox(width: 6),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(
-              color: AppColors.labelGreenBG,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: const Text("官方發布",
-                style: TextStyle(fontSize: 11, color: AppColors.deepGreen)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCommentSection() {
-    return Column(
-      children: [
-        Container(
-          width: double.infinity,
-          decoration: const BoxDecoration(
-            color: AppColors.lightGreenBG,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
-          ),
-          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-          child: const Align(
-            alignment: Alignment.centerLeft,
-            child: Text("用戶互動區",
-                style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.deepGreen)),
-          ),
-        ),
-        Container(
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
-            border: Border.all(color: Colors.grey.shade300),
-          ),
-          child: Column(
-            children: [
-              ..._comments.map((comment) => _buildCommentItem(comment)).toList(),
-              const Divider(),
-              _buildCommentInputBox(),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildCommentItem(Comment comment) {
-    return Padding(
-      padding: const EdgeInsets.all(12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          CircleAvatar(
-            backgroundColor: comment.isExpert ? AppColors.deepGreen : AppColors.userGray,
-            radius: 16,
-            child: const Icon(Icons.person, color: Colors.white, size: 18),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(comment.authorName,
-                    style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: comment.isExpert ? AppColors.deepGreen : Colors.black87)),
-                const SizedBox(height: 4),
-                Text(comment.content,
-                    style: const TextStyle(fontSize: 13, color: AppColors.darkText)),
-              ],
-            ),
-          )
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCommentInputBox() {
-    return Padding(
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _commentController,
-                  decoration: InputDecoration(
-                    hintText: "留下您的評論...",
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(color: AppColors.userGray, width: 1),
-                    ),
-                  ),
-                  onSubmitted: (_) => _submitComment(),
-                ),
-              ),
-              const SizedBox(width: 8),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.deepGreen,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                onPressed: _submitComment,
-                child: const Text("發送", style: TextStyle(color: Colors.white)),
-              )
-            ],
-          ),
-          const SizedBox(height: 8),
-          const Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              Icon(Icons.arrow_upward, color: AppColors.deepGreen, size: 20),
-              SizedBox(width: 8),
-              Icon(Icons.arrow_downward, color: Colors.grey, size: 20),
-            ],
-          )
-        ],
-      ),
-    );
-  }
-
-  Widget _buildReportDialog(BuildContext context) {
+  // ----------------------------
+  // 舉報 Dialog
+  // ----------------------------
+  Widget _buildReportDialog() {
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Container(
@@ -476,15 +292,18 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text("疑慮內容回報",
-                    style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white)),
+                const Text(
+                  "疑慮內容回報",
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
                 IconButton(
                   icon: const Icon(Icons.close, color: Colors.white),
                   onPressed: () => Navigator.pop(context),
-                )
+                ),
               ],
             ),
             const SizedBox(height: 12),
@@ -500,9 +319,10 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
               ),
             ),
             const SizedBox(height: 12),
-            const TextField(
+            TextField(
+              controller: _reportController,
               maxLines: 3,
-              decoration: InputDecoration(
+              decoration: const InputDecoration(
                 hintText: "請說明舉報理由...",
                 fillColor: Colors.white,
                 filled: true,
@@ -519,13 +339,236 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
                     borderRadius: BorderRadius.circular(8),
                   ),
                 ),
-                onPressed: () => Navigator.pop(context),
+                onPressed: () async {
+                  final reason = _reportController.text.trim();
+                  if (reason.isEmpty) {
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(const SnackBar(content: Text("請輸入舉報理由")));
+                    return;
+                  }
+                  await _submitReport(reason);
+                  _reportController.clear();
+                  Navigator.pop(context);
+                },
                 child: const Text("舉報", style: TextStyle(color: Colors.white)),
               ),
-            )
+            ),
           ],
         ),
       ),
+    );
+  }
+
+  // ----------------------------
+  // UI
+  // ----------------------------
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    if (_articleData == null) {
+      return const Scaffold(body: Center(child: Text("找不到文章資料")));
+    }
+
+    final credibility = (_articleData!['reliability_score'] ?? 0.0).toDouble();
+    final credibilityColor = credibility > 3.0
+        ? AppColors.deepGreen
+        : (credibility > 2.0 ? Colors.orange : AppColors.dangerRed);
+
+    return Scaffold(
+      backgroundColor: Colors.grey[100],
+      appBar: AppBar(
+        backgroundColor: AppColors.primaryGreen,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: const Text(
+          "文章詳情",
+          style: TextStyle(color: Colors.white, fontSize: 18),
+        ),
+        centerTitle: true,
+
+        // ⭐⭐ 這裡新增「收藏按鈕」，其他全部不動 ⭐⭐
+        actions: [
+          IconButton(
+            icon: Icon(
+              _isFavorited ? Icons.bookmark : Icons.bookmark_border,
+              color: Colors.white,
+            ),
+            onPressed: _toggleFavorite,
+          ),
+          IconButton(
+            icon: const Icon(Icons.report, color: Colors.white),
+            onPressed: () => showDialog(
+              context: context,
+              builder: (_) => _buildReportDialog(),
+            ),
+          ),
+        ],
+      ),
+
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 文章標題
+            Text(
+              _articleData!['title'] ?? '未命名文章',
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: credibilityColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    credibility > 3.0
+                        ? "高可信度"
+                        : (credibility > 2.0 ? "中等可信度" : "低可信度"),
+                    style: TextStyle(color: credibilityColor, fontSize: 12),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  "發布時間：${_articleData!['published_time'] ?? '未知'}",
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            _buildAICard(credibility, _articleData!['ai_analysis'] ?? ''),
+            const SizedBox(height: 16),
+            Text(
+              _articleData!['content'] ?? '暫無內容',
+              style: const TextStyle(fontSize: 14, height: 1.6),
+            ),
+            const SizedBox(height: 20),
+            _buildCommentSection(),
+            const SizedBox(height: 100),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAICard(double credibility, String analysis) {
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "AI可信度分析",
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+
+            Row(
+              children: [
+                Text(
+                  "可信度評分：${credibility.toStringAsFixed(2)}",
+                  style: const TextStyle(fontSize: 14, color: Colors.black87),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  "（0-5分）",
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 8),
+
+            // ⭐ 修正後的進度條
+            LinearProgressIndicator(
+              value: (credibility / 5).clamp(0.0, 1.0), // 0-5 → 0-1
+              backgroundColor: Colors.grey[200],
+              valueColor: AlwaysStoppedAnimation<Color>(
+                credibility > 3.0
+                    ? AppColors.deepGreen
+                    : (credibility > 2.0 ? Colors.orange : AppColors.dangerRed),
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            Text(analysis, style: const TextStyle(fontSize: 13, height: 1.5)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCommentSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          "用戶留言",
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: AppColors.deepGreen,
+          ),
+        ),
+        const SizedBox(height: 8),
+
+        if (_comments.isEmpty)
+          const Text("暫無留言", style: TextStyle(color: Colors.grey))
+        else
+          ..._comments.map(
+            (c) => ListTile(
+              leading: const CircleAvatar(child: Icon(Icons.person)),
+              title: Text(c['author'] ?? '匿名用戶'),
+              subtitle: Text(c['content'] ?? ''),
+              trailing: Text(
+                c['time'] ?? '',
+                style: const TextStyle(fontSize: 10, color: Colors.grey),
+              ),
+            ),
+          ),
+
+        const Divider(),
+
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _commentController,
+                decoration: InputDecoration(
+                  hintText: "留下您的評論...",
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.deepGreen,
+              ),
+              onPressed: _submitComment,
+              child: const Text("發送", style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

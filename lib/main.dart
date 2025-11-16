@@ -12,14 +12,10 @@ import 'package:truthliesdetector/screens/profile_page.dart';
 import 'package:truthliesdetector/screens/home_page.dart';
 import 'package:truthliesdetector/screens/splash_page.dart';
 import 'package:truthliesdetector/themes/app_colors.dart';
-import 'package:flutter/widgets.dart';
-import 'route_observer.dart';
-import 'package:flutter/widgets.dart';
 import 'package:truthliesdetector/screens/AIchat.dart';
 import 'package:truthliesdetector/themes/app_drawer.dart';
 import 'package:truthliesdetector/screens/ai_report_page.dart'; // <<< 新增：導入 AI 報告頁面
 import 'package:truthliesdetector/screens/settings_page.dart';
-import 'package:truthliesdetector/screens/database_test_page.dart';
 import 'package:truthliesdetector/themes/ball.dart';
 import 'package:screenshot/screenshot.dart';
 
@@ -35,16 +31,10 @@ class MyApp extends StatelessWidget {
     return ChangeNotifierProvider(
       create: (context) => UserProvider(),
       child: MaterialApp(
-        // RouteObserver used so pages (like HistoryPage) can refresh when they
-        // become visible again (didPopNext). See `RouteObserver` usage in
-        // `lib/screens/history_page.dart`.
-        navigatorObservers: [routeObserver],
         title: 'Truths and Lies Detector',
         theme: ThemeData(
           primaryColor: AppColors.primaryGreen,
-          colorScheme: const ColorScheme.light(
-            primary: AppColors.primaryGreen,
-          ),
+          colorScheme: const ColorScheme.light(primary: AppColors.primaryGreen),
           fontFamily: 'NotoSansSC',
           useMaterial3: true,
         ),
@@ -59,7 +49,8 @@ class MyApp extends StatelessWidget {
           HistoryPage.route: (context) => const HistoryPage(),
           ProfilePage.route: (context) => const ProfilePage(),
           AIchat.route: (context) => const AIchat(initialQuery: ''),
-          AiReportPage.route: (context) => const AiReportPage(), // <<< 新增：註冊 AI 報告頁面路由
+          AiReportPage.route: (context) =>
+              const AiReportPage(), // <<< 新增：註冊 AI 報告頁面路由
           SettingsPage.route: (context) => const SettingsPage(),
         },
         debugShowCheckedModeBanner: false,
@@ -88,7 +79,7 @@ class _MainLayoutState extends State<MainLayout> {
     const AiReportPage(), // Index 1: 將「發現」頁面替換為 AiReportPage (AI報告與趨勢分析)
     // TODO: 如果要將中間按鈕 (Index 2) 導向新的 AI 報告頁面，請將下一行註解，並取消再下一行的註解
     // const AiReportPage(),
-    const AIacc(), 
+    const AIacc(),
     const SearchPage(),
     const ProfilePage(),
   ];
@@ -127,10 +118,7 @@ class _MainLayoutState extends State<MainLayout> {
             // 使用 Padding 包裹 IndexedStack，以在底部留出空間
             Padding(
               padding: const EdgeInsets.only(bottom: 80),
-              child: IndexedStack(
-                index: _currentIndex,
-                children: _pages,
-              ),
+              child: IndexedStack(index: _currentIndex, children: _pages),
             ),
             Positioned(
               bottom: 0,
@@ -226,7 +214,11 @@ class CustomBottomNavBar extends StatelessWidget {
                   border: Border.all(color: mainGreen, width: 4),
                 ),
                 child: Center(
-                  child: Image.asset("lib/assets/logo2.png", height: 60, fit: BoxFit.contain),
+                  child: Image.asset(
+                    "lib/assets/logo2.png",
+                    height: 60,
+                    fit: BoxFit.contain,
+                  ),
                 ),
               ),
             ),
@@ -236,7 +228,12 @@ class CustomBottomNavBar extends StatelessWidget {
     );
   }
 
-  Widget _buildNavItem(IconData icon, String label, int index, Color mainGreen) {
+  Widget _buildNavItem(
+    IconData icon,
+    String label,
+    int index,
+    Color mainGreen,
+  ) {
     bool isSelected = currentIndex == index;
     return GestureDetector(
       onTap: () => onTap(index),
@@ -248,7 +245,7 @@ class CustomBottomNavBar extends StatelessWidget {
           Text(
             label,
             style: TextStyle(
-              fontSize: 12, 
+              fontSize: 12,
               color: Colors.white,
               fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
             ),

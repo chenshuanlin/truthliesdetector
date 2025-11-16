@@ -9,7 +9,13 @@ class ApiService {
   ApiService._internal(this.baseUrl);
 
   static ApiService getInstance({String? baseUrl}) {
-    _instance ??= ApiService._internal(baseUrl ?? const String.fromEnvironment('API_BASE_URL', defaultValue: 'http://localhost:5000'));
+    _instance ??= ApiService._internal(
+      baseUrl ??
+          const String.fromEnvironment(
+            'API_BASE_URL',
+            defaultValue: 'http://10.0.2.2:5000',
+          ),
+    );
     return _instance!;
   }
 
@@ -29,10 +35,11 @@ class ApiService {
 
   Future<User?> login(String account, String password) async {
     final url = Uri.parse('$baseUrl/api/login');
-    final resp = await http.post(url, headers: {'Content-Type': 'application/json'}, body: jsonEncode({
-      'account': account,
-      'password': password,
-    }));
+    final resp = await http.post(
+      url,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'account': account, 'password': password}),
+    );
     if (resp.statusCode == 200) {
       final data = jsonDecode(resp.body);
       return _userFromMap(data['user']);
@@ -42,13 +49,17 @@ class ApiService {
 
   Future<String> register(User user) async {
     final url = Uri.parse('$baseUrl/api/register');
-    final resp = await http.post(url, headers: {'Content-Type': 'application/json'}, body: jsonEncode({
-      'account': user.account,
-      'username': user.username,
-      'password': user.password,
-      'email': user.email,
-      'phone': user.phone,
-    }));
+    final resp = await http.post(
+      url,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'account': user.account,
+        'username': user.username,
+        'password': user.password,
+        'email': user.email,
+        'phone': user.phone,
+      }),
+    );
     if (resp.statusCode == 200) return 'success';
     try {
       final data = jsonDecode(resp.body);
@@ -84,8 +95,9 @@ class ApiService {
       print('API 回應內容: ${resp.body}');
       if (resp.statusCode == 200) {
         final data = jsonDecode(resp.body);
-        // 根據實際 API 回傳內容調整
-        return data['ok'] == true || data['success'] == true || data['stats'] == true;
+        return data['ok'] == true ||
+            data['success'] == true ||
+            data['stats'] == true;
       }
       return false;
     } catch (e) {
@@ -108,13 +120,20 @@ class ApiService {
     }
   }
 
-  Future<Map<String, dynamic>?> analyzeImage({String? imageUrl, String? imageBase64}) async {
+  Future<Map<String, dynamic>?> analyzeImage({
+    String? imageUrl,
+    String? imageBase64,
+  }) async {
     final url = Uri.parse('$baseUrl/api/image-check');
     try {
       final payload = <String, dynamic>{};
       if (imageUrl != null) payload['url'] = imageUrl;
       if (imageBase64 != null) payload['imageBase64'] = imageBase64;
-      final resp = await http.post(url, headers: {'Content-Type': 'application/json'}, body: jsonEncode(payload));
+      final resp = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(payload),
+      );
       if (resp.statusCode == 200) {
         final data = jsonDecode(resp.body) as Map<String, dynamic>;
         return data['result'] as Map<String, dynamic>? ?? data;
@@ -123,40 +142,6 @@ class ApiService {
     } catch (e) {
       print('analyzeImage error: $e');
       return null;
-    }
-  }
-
-  // 取得使用者設定
-  // (settings methods implemented later in file)
-
-  /// 取得/更新使用者設定（設定與通知）
-  Future<Map<String, dynamic>?> getUserSettings(int userId) async {
-    final url = Uri.parse('$baseUrl/api/settings/$userId');
-    try {
-      final resp = await http.get(url);
-      if (resp.statusCode == 200) {
-        final data = jsonDecode(resp.body) as Map<String, dynamic>;
-        return data;
-      }
-      return null;
-    } catch (e) {
-      print('getUserSettings error: $e');
-      return null;
-    }
-  }
-
-  Future<bool> updateUserSettings(int userId, Map<String, dynamic> settings) async {
-    final url = Uri.parse('$baseUrl/api/settings/$userId');
-    try {
-      final resp = await http.put(url, headers: {'Content-Type': 'application/json'}, body: jsonEncode(settings));
-      if (resp.statusCode == 200) {
-        final data = jsonDecode(resp.body);
-        return data['success'] == true;
-      }
-      return false;
-    } catch (e) {
-      print('updateUserSettings error: $e');
-      return false;
     }
   }
 
@@ -191,5 +176,71 @@ class ApiService {
       email: map['email'] as String,
       phone: map['phone'] as String?,
     );
+  }
+
+  // 🔥 熱門趨勢文章
+  Future<List<dynamic>> fetchTrendingArticles() async {
+    final response = await http.get(Uri.parse('$baseUrl/api/trending'));
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    } else {
+      throw Exception('無法取得熱門趨勢資料');
+    }
+  }
+
+  // 🎯 為您推薦（推薦文章）
+  Future<List<dynamic>> fetchRecommendations() async {
+    final response = await http.get(Uri.parse('$baseUrl/api/recommended'));
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    } else {
+      throw Exception('無法取得推薦資料');
+    }
+  }
+
+  // 🏆 排行榜（依 reliability_score）
+  Future<List<dynamic>> fetchRanking() async {
+    final response = await http.get(Uri.parse('$baseUrl/api/ranking'));
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    } else {
+      throw Exception('無法取得排行榜資料');
+    }
+  }
+
+  // 📰 文章詳情（HomePage 點擊會用到）
+  Future<Map<String, dynamic>> fetchArticleDetail(int articleId) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/api/articles/$articleId'),
+    );
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    } else {
+      throw Exception('無法取得文章詳情');
+    }
+  }
+
+  // 💬 取得留言
+  Future<List<dynamic>> fetchComments(int articleId) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/api/articles/$articleId/comments'),
+    );
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    } else {
+      throw Exception('無法取得留言');
+    }
+  }
+
+  // ✏️ 發送留言
+  Future<void> postComment(int articleId, String author, String content) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/articles/$articleId/comments'),
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode({'author': author, 'content': content}),
+    );
+    if (response.statusCode != 201) {
+      throw Exception('留言發送失敗');
+    }
   }
 }

@@ -1,0 +1,49 @@
+{
+  "mode": "KEYWORD",
+  "items": [
+    {
+      "index": 1,
+      "title": "AI詐騙新手法曝光，民眾損失慘重，警方籲勿輕信陌生訊息",
+      "url": "https://news.example.com/ai-scam-fake-news",
+      "domain": "news.example.com",
+      "content": "近期出現利用AI技術偽造聲音與影像的詐騙手法，已有多名民眾受害，警方呼籲提高警覺。",
+      "ann_features": {
+        "source_entity_score": 0.7,
+        "domain_score": 0.7
+      },
+      "short_judgement": "AI詐騙需特別注意，勿輕信陌生人。",
+      "model_score": 4,
+      "model_proba": [
+        0.2,
+        0.2,
+        0.5,
+        0.05,
+        0.03,
+        0.02
+      ],
+      "crawled_at": "2025-10-13T12:00:00"
+    },
+    {
+      "index": 2,
+      "title": "環保議題假訊息流竄，專家：部分數據遭斷章取義",
+      "url": "https://env.example.com/green-fake-news",
+      "domain": "env.example.com",
+      "content": "有關全球暖化的假訊息在社群平台流傳，專家指出部分數據遭誤用，建議查證官方資料。",
+      "ann_features": {
+        "source_entity_score": 0.85,
+        "domain_score": 0.75
+      },
+      "short_judgement": "環保議題需查證來源，勿信謠言。",
+      "model_score": 3,
+      "model_proba": [
+        0.15,
+        0.15,
+        0.6,
+        0.05,
+        0.03,
+        0.02
+      ],
+      "crawled_at": "2025-10-13T12:00:00"
+    }
+  ]
+}
