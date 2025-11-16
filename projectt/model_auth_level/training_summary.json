@@ -1,0 +1,23 @@
+{
+  "rows_used": 270,
+  "num_features": 8,
+  "features": [
+    "source_entity_score",
+    "domain_score",
+    "title_body_consistency",
+    "evidence_quality",
+    "ad_promo_intensity",
+    "hyperbole_score",
+    "emotive_clickbait_density",
+    "title_body_embedding_cosine"
+  ],
+  "label_col": "authenticity_level",
+  "has_query_category": false,
+  "num_queries_total": 9,
+  "num_queries_train": 7,
+  "num_queries_valid": 2,
+  "best_iteration": 49,
+  "valid_accuracy": 0.55,
+  "model_file": "model_auth_level\\auth_level_lgbm.txt",
+  "feature_importance_csv": "model_auth_level\\feature_importance.csv"
+}

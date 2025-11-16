@@ -35,8 +35,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       final ranking = await api.fetchRanking();
 
       ranking.sort(
-        (a, b) => (b['reliability_score'] ?? 0)
-            .compareTo(a['reliability_score'] ?? 0),
+        (a, b) => (b['reliability_score'] ?? 0).compareTo(
+          a['reliability_score'] ?? 0,
+        ),
       );
 
       Map<String, List<dynamic>> grouped = {};
@@ -81,7 +82,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       padding: const EdgeInsets.all(16),
       children: [
         // 🔥🔥 搜尋列已完全移除 🔥🔥
-
         const Text(
           "熱門趨勢",
           style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
@@ -144,7 +144,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               "今日排行榜",
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
-            
           ],
         ),
 
@@ -177,8 +176,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) =>
-                  ArticleDetailPage(articleId: article['id'] ?? 0),
+              builder: (_) => ArticleDetailPage(articleId: article['id'] ?? 0),
             ),
           );
         },
@@ -218,8 +216,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) =>
-                    ArticleDetailPage(articleId: a['id'] ?? 0),
+                builder: (_) => ArticleDetailPage(articleId: a['id'] ?? 0),
               ),
             );
           },
@@ -277,8 +274,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) =>
-                  ArticleDetailPage(articleId: articleId ?? 0),
+              builder: (_) => ArticleDetailPage(articleId: articleId ?? 0),
             ),
           );
         },
@@ -294,8 +290,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           title,
           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
         ),
-        subtitle:
-            Text(subtitle, style: const TextStyle(color: Colors.black54)),
+        subtitle: Text(subtitle, style: const TextStyle(color: Colors.black54)),
         trailing: const Icon(Icons.arrow_forward_ios, size: 16),
       ),
     );

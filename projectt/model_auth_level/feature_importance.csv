@@ -1,0 +1,9 @@
+feature,gain_importance,split_importance
+domain_score,671.5374310103689,213
+source_entity_score,608.2426525012052,225
+emotive_clickbait_density,585.6028501260553,188
+hyperbole_score,511.3109676997701,162
+evidence_quality,475.02827047241226,175
+ad_promo_intensity,471.86498089618544,191
+title_body_consistency,329.7757860511192,119
+title_body_embedding_cosine,316.4458046363434,119

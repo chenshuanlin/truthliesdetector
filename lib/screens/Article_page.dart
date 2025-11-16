@@ -25,12 +25,104 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
   bool _isLoading = true;
   final List<Map<String, dynamic>> _comments = [];
 
+  // ⭐ 新增：收藏狀態
+  bool _isFavorited = false;
+
   @override
   void initState() {
     super.initState();
     _fetchArticleData();
     _fetchComments();
     _addViewHistory();
+    _checkFavoriteStatus(); // ⭐ 檢查收藏狀態
+  }
+
+  // ----------------------------
+  // ⭐ 檢查是否已收藏
+  // ----------------------------
+  Future<void> _checkFavoriteStatus() async {
+    try {
+      final api = ApiService.getInstance();
+      final baseUrl = api.baseUrl;
+
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
+      final userId = userProvider.userId;
+      if (userId == null) return;
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/favorites/$userId'),
+      );
+
+      if (response.statusCode == 200) {
+        final List data = json.decode(utf8.decode(response.bodyBytes));
+
+        setState(() {
+          _isFavorited = data.any(
+            (item) => item["article_id"] == widget.articleId,
+          );
+        });
+      }
+    } catch (e) {
+      print("❌ 讀取收藏狀態失敗: $e");
+    }
+  }
+
+  // ----------------------------
+  // ⭐ 新增/取消收藏
+  // ----------------------------
+  Future<void> _toggleFavorite() async {
+    try {
+      final api = ApiService.getInstance();
+      final baseUrl = api.baseUrl;
+
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
+      final userId = userProvider.userId;
+
+      if (userId == null) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text("請先登入才能收藏")));
+        return;
+      }
+
+      if (_isFavorited) {
+        // ---- 取消收藏 ----
+        final response = await http.delete(
+          Uri.parse('$baseUrl/api/favorites'),
+          headers: {'Content-Type': 'application/json'},
+          body: json.encode({
+            "user_id": userId,
+            "article_id": widget.articleId,
+          }),
+        );
+
+        if (response.statusCode == 200) {
+          setState(() => _isFavorited = false);
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text("已取消收藏")));
+        }
+      } else {
+        // ---- 新增收藏 ----
+        final response = await http.post(
+          Uri.parse('$baseUrl/api/favorites'),
+          headers: {'Content-Type': 'application/json'},
+          body: json.encode({
+            "user_id": userId,
+            "article_id": widget.articleId,
+          }),
+        );
+
+        if (response.statusCode == 201 || response.statusCode == 409) {
+          setState(() => _isFavorited = true);
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text("已加入收藏")));
+        }
+      }
+    } catch (e) {
+      print("❌ 收藏操作錯誤: $e");
+    }
   }
 
   // ----------------------------
@@ -63,7 +155,8 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
       final api = ApiService.getInstance();
       final baseUrl = api.baseUrl;
       final response = await http.get(
-          Uri.parse('$baseUrl/api/articles/${widget.articleId}'));
+        Uri.parse('$baseUrl/api/articles/${widget.articleId}'),
+      );
       if (response.statusCode == 200) {
         final data = json.decode(utf8.decode(response.bodyBytes));
         setState(() => _articleData = data);
@@ -84,18 +177,26 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
     try {
       final api = ApiService.getInstance();
       final baseUrl = api.baseUrl;
-      final response = await http
-          .get(Uri.parse('$baseUrl/api/articles/${widget.articleId}/comments'));
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/articles/${widget.articleId}/comments'),
+      );
+
       if (response.statusCode == 200) {
         final data = json.decode(utf8.decode(response.bodyBytes));
+
         setState(() {
           _comments
             ..clear()
-            ..addAll(data.map((e) => Map<String, dynamic>.from(e)));
+            ..addAll(
+              (data as List).map((e) => Map<String, dynamic>.from(e)).toList(),
+            );
         });
+      } else {
+        print('⚠️ 無法載入留言: ${response.statusCode}');
       }
     } catch (e) {
-      print("❌ 載入留言失敗: $e");
+      print('❌ 載入留言失敗: $e');
     }
   }
 
@@ -141,8 +242,9 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
     final userProvider = Provider.of<UserProvider>(context, listen: false);
     final userId = userProvider.userId;
     if (userId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("請先登入才能舉報文章")));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("請先登入才能舉報文章")));
       return;
     }
 
@@ -159,15 +261,18 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
       );
       final data = json.decode(response.body);
       if (response.statusCode == 201 && data['ok'] == true) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text("舉報成功")));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text("舉報成功")));
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("舉報失敗：${data['error'] ?? '未知錯誤'}")));
+          SnackBar(content: Text("舉報失敗：${data['error'] ?? '未知錯誤'}")),
+        );
       }
     } catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text("舉報失敗：$e")));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("舉報失敗：$e")));
     }
   }
 
@@ -190,14 +295,15 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
                 const Text(
                   "疑慮內容回報",
                   style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white),
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
                 ),
                 IconButton(
                   icon: const Icon(Icons.close, color: Colors.white),
                   onPressed: () => Navigator.pop(context),
-                )
+                ),
               ],
             ),
             const SizedBox(height: 12),
@@ -236,18 +342,18 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
                 onPressed: () async {
                   final reason = _reportController.text.trim();
                   if (reason.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("請輸入舉報理由")));
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(const SnackBar(content: Text("請輸入舉報理由")));
                     return;
                   }
                   await _submitReport(reason);
                   _reportController.clear();
                   Navigator.pop(context);
                 },
-                child:
-                    const Text("舉報", style: TextStyle(color: Colors.white)),
+                child: const Text("舉報", style: TextStyle(color: Colors.white)),
               ),
-            )
+            ),
           ],
         ),
       ),
@@ -260,19 +366,14 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     if (_articleData == null) {
-      return const Scaffold(
-        body: Center(child: Text("找不到文章資料")),
-      );
+      return const Scaffold(body: Center(child: Text("找不到文章資料")));
     }
 
-    final credibility =
-        (_articleData!['reliability_score'] ?? 0.0).toDouble();
+    final credibility = (_articleData!['reliability_score'] ?? 0.0).toDouble();
     final credibilityColor = credibility > 3.0
         ? AppColors.deepGreen
         : (credibility > 2.0 ? Colors.orange : AppColors.dangerRed);
@@ -291,7 +392,16 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
           style: TextStyle(color: Colors.white, fontSize: 18),
         ),
         centerTitle: true,
+
+        // ⭐⭐ 這裡新增「收藏按鈕」，其他全部不動 ⭐⭐
         actions: [
+          IconButton(
+            icon: Icon(
+              _isFavorited ? Icons.bookmark : Icons.bookmark_border,
+              color: Colors.white,
+            ),
+            onPressed: _toggleFavorite,
+          ),
           IconButton(
             icon: const Icon(Icons.report, color: Colors.white),
             onPressed: () => showDialog(
@@ -301,6 +411,7 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
           ),
         ],
       ),
+
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -309,15 +420,16 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
             // 文章標題
             Text(
               _articleData!['title'] ?? '未命名文章',
-              style: const TextStyle(
-                  fontSize: 20, fontWeight: FontWeight.bold),
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             Row(
               children: [
                 Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 8, vertical: 4),
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: credibilityColor.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(6),
@@ -326,21 +438,18 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
                     credibility > 3.0
                         ? "高可信度"
                         : (credibility > 2.0 ? "中等可信度" : "低可信度"),
-                    style: TextStyle(
-                        color: credibilityColor, fontSize: 12),
+                    style: TextStyle(color: credibilityColor, fontSize: 12),
                   ),
                 ),
                 const SizedBox(width: 8),
                 Text(
                   "發布時間：${_articleData!['published_time'] ?? '未知'}",
-                  style: const TextStyle(
-                      fontSize: 12, color: Colors.grey),
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
                 ),
               ],
             ),
             const SizedBox(height: 16),
-            _buildAICard(
-                credibility, _articleData!['ai_analysis'] ?? ''),
+            _buildAICard(credibility, _articleData!['ai_analysis'] ?? ''),
             const SizedBox(height: 16),
             Text(
               _articleData!['content'] ?? '暫無內容',
@@ -398,16 +507,12 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
 
             const SizedBox(height: 12),
 
-            Text(
-              analysis,
-              style: const TextStyle(fontSize: 13, height: 1.5),
-            ),
+            Text(analysis, style: const TextStyle(fontSize: 13, height: 1.5)),
           ],
         ),
       ),
     );
   }
-
 
   Widget _buildCommentSection() {
     return Column(
@@ -416,11 +521,13 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
         const Text(
           "用戶留言",
           style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: AppColors.deepGreen),
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: AppColors.deepGreen,
+          ),
         ),
         const SizedBox(height: 8),
+
         if (_comments.isEmpty)
           const Text("暫無留言", style: TextStyle(color: Colors.grey))
         else
@@ -435,7 +542,9 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
               ),
             ),
           ),
+
         const Divider(),
+
         Row(
           children: [
             Expanded(
@@ -444,17 +553,18 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
                 decoration: InputDecoration(
                   hintText: "留下您的評論...",
                   border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8)),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
               ),
             ),
             const SizedBox(width: 8),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.deepGreen),
+                backgroundColor: AppColors.deepGreen,
+              ),
               onPressed: _submitComment,
-              child: const Text("發送",
-                  style: TextStyle(color: Colors.white)),
+              child: const Text("發送", style: TextStyle(color: Colors.white)),
             ),
           ],
         ),
