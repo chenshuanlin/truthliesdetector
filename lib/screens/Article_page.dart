@@ -177,19 +177,26 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
     try {
       final api = ApiService.getInstance();
       final baseUrl = api.baseUrl;
+
       final response = await http.get(
         Uri.parse('$baseUrl/api/articles/${widget.articleId}/comments'),
       );
+
       if (response.statusCode == 200) {
         final data = json.decode(utf8.decode(response.bodyBytes));
+
         setState(() {
           _comments
             ..clear()
-            ..addAll(data.map((e) => Map<String, dynamic>.from(e)));
+            ..addAll(
+              (data as List).map((e) => Map<String, dynamic>.from(e)).toList(),
+            );
         });
+      } else {
+        print('⚠️ 無法載入留言: ${response.statusCode}');
       }
     } catch (e) {
-      print("❌ 載入留言失敗: $e");
+      print('❌ 載入留言失敗: $e');
     }
   }
 
@@ -520,6 +527,7 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
           ),
         ),
         const SizedBox(height: 8),
+
         if (_comments.isEmpty)
           const Text("暫無留言", style: TextStyle(color: Colors.grey))
         else
@@ -534,7 +542,9 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
               ),
             ),
           ),
+
         const Divider(),
+
         Row(
           children: [
             Expanded(
