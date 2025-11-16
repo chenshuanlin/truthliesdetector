@@ -1,159 +1,131 @@
-# lightweight DB wrapper used by routes (delegates to existing models if available)
+# =====================================================================
+# database.py  — 最終穩定版，完全對應你的 models.py
+# =====================================================================
+
 import logging
 from datetime import datetime, timedelta
 
+# ============================================================
+#  正確匯入 models 中的 SQLAlchemy db 與 ChatHistory / User
+# ============================================================
 try:
-    # try to import existing SQLAlchemy models from project's models.py
-    from models import db, ChatHistory, AnalysisResult
-except Exception:
-    # fallback minimal implementations (in case original models are different)
+    from models import db, ChatHistory, User
+except Exception as e:
+    logging.error(f"❌ 無法從 models 匯入資料庫模型：{e}")
     db = None
+    ChatHistory = None
+    User = None
 
 
+# ============================================================
+#  初始化資料庫
+# ============================================================
 def init_db():
     if db:
-        db.create_all()
-    logging.info("DB init complete (if SQLAlchemy configured)")
+        try:
+            db.create_all()
+            logging.info("✅ DB 初始化完成")
+        except Exception as e:
+            logging.error(f"❌ DB 初始化失敗：{e}")
+    else:
+        logging.warning("⚠️ DB 未正確載入，略過初始化")
 
 
+# ============================================================
+#  寫入聊天紀錄
+# ============================================================
 def insert_chat_history(query_text, ai_acc_result, gemini_result, user_id=None):
+    print(f"[insert_chat_history] user_id={user_id}")
+
+    # DB 未初始化 → 跳過
+    if db is None or ChatHistory is None:
+        print("❌ DB 或模型未載入，跳過 insert")
+        return
+
+    # ============================================================
+    #  驗證 user_id（避免 FK 錯誤）
+    # ============================================================
+    user_id_to_use = None
+    if user_id is not None:
+        try:
+            exists = db.session.get(User, user_id)
+            if exists:
+                user_id_to_use = user_id
+            else:
+                print(f"⚠️ user_id {user_id} 不存在 → 改為 NULL")
+        except Exception as e:
+            print(f"⚠️ 檢查 user_id 時發生錯誤：{e}")
+
+    # ============================================================
+    #  寫入資料庫
+    # ============================================================
     try:
-        # debug: print so we can always see this in server output
-        print(f"insert_chat_history called (module db is {'set' if db else 'None'}, user_id={user_id})")
-        # if db wasn't available at module import time, try to import models now
-        local_db = db
-        local_ChatHistory = None
-        if local_db is None:
-            try:
-                from models import db as local_db, ChatHistory as local_ChatHistory
-                print('Dynamically imported models inside insert_chat_history')
-            except Exception as e:
-                print('Could not import models inside insert_chat_history:', e)
-                print('DB not configured - skipping insert_chat_history')
-                return
-        else:
-            # resolve ChatHistory if not bound at module level
-            try:
-                local_ChatHistory = ChatHistory
-            except Exception:
-                try:
-                    from models import ChatHistory as local_ChatHistory
-                except Exception as e:
-                    print('Could not resolve ChatHistory model:', e)
-                    return
-
-        # If a user_id was provided, check that the user exists. If not, insert with NULL user_id
-        user_id_to_use = None
-        if user_id is not None:
-            try:
-                # try to import User model
-                try:
-                    from models import User as local_User
-                except Exception:
-                    local_User = None
-
-                if local_User is not None:
-                    # prefer session.get when available (SQLAlchemy 1.4+/2.0)
-                    exists = None
-                    try:
-                        exists = local_db.session.get(local_User, user_id)
-                    except Exception:
-                        try:
-                            exists = local_db.session.query(local_User).filter_by(user_id=user_id).first()
-                        except Exception:
-                            exists = None
-
-                    if exists:
-                        user_id_to_use = user_id
-                    else:
-                        print(f'user_id {user_id} not found in users table; inserting with null user_id')
-                        user_id_to_use = None
-                else:
-                    # if we cannot resolve User model, play safe and insert NULL to avoid FK errors
-                    print('User model not available; inserting with null user_id')
-                    user_id_to_use = None
-            except Exception as e:
-                print('Error while checking user existence:', e)
-                user_id_to_use = None
-        else:
-            user_id_to_use = None
-
-        # create record using SQLAlchemy model instances (store JSON as native types)
-        record = local_ChatHistory(
+        record = ChatHistory(
             user_id=user_id_to_use,
             query_text=query_text,
             ai_acc_result=ai_acc_result,
             gemini_result=gemini_result,
-            created_at=datetime.utcnow()
+            created_at=datetime.utcnow(),
         )
-        # debug: print engine URL and bound session info
-        try:
-            print('SQLALCHEMY_ENGINE_URL =', getattr(local_db, 'engine', None) and str(local_db.engine.url))
-            try:
-                bind = local_db.session.get_bind()
-                print('session bind =', bind)
-            except Exception as e:
-                print('could not get session bind:', e)
-        except Exception:
-            pass
 
-        local_db.session.add(record)
-        local_db.session.commit()
-        print('insert_chat_history: committed record id=', getattr(record, 'id', None))
+        db.session.add(record)
+        db.session.commit()
+
+        print(f"✅ chat_history 寫入成功 id={record.id}")
+
     except Exception as e:
-        print(f"Could not insert chat history: {e}")
+        print(f"❌ 無法寫入 chat_history：{e}")
         import traceback
         print(traceback.format_exc())
 
 
+# ============================================================
+#  讀取聊天紀錄
+# ============================================================
 def get_chat_history(limit=50, user_id=None):
-    try:
-        # dynamically resolve db and ChatHistory to avoid import-order issues
-        local_db = db
-        local_ChatHistory = None
-        if local_db is None:
-            try:
-                from models import db as local_db, ChatHistory as local_ChatHistory
-            except Exception:
-                return []
-        else:
-            try:
-                local_ChatHistory = ChatHistory
-            except Exception:
-                try:
-                    from models import ChatHistory as local_ChatHistory
-                except Exception:
-                    return []
+    if db is None or ChatHistory is None:
+        return []
 
-        q = local_ChatHistory.query
-        # accept user_id as int or string; convert if possible
+    try:
+        q = ChatHistory.query.order_by(ChatHistory.created_at.desc())
+
         if user_id is not None:
             try:
                 uid = int(user_id)
                 q = q.filter_by(user_id=uid)
-            except Exception:
+            except:
                 pass
-        records = q.order_by(local_ChatHistory.created_at.desc()).limit(limit).all()
-        rows = []
-        for r in records:
-            rows.append({
+
+        records = q.limit(limit).all()
+
+        return [
+            {
+                "id": r.id,
                 "user_id": r.user_id,
                 "query": r.query_text,
+                "ai_acc_result": r.ai_acc_result,
                 "gemini_result": r.gemini_result,
-                "created_at": r.created_at.isoformat() if r.created_at else None
-            })
-        return rows
+                "created_at": r.created_at.isoformat(),
+            }
+            for r in records
+        ]
+
     except Exception as e:
-        logging.warning(f"get_chat_history failed: {e}")
+        logging.error(f"❌ 讀取 chat_history 失敗：{e}")
         return []
 
 
+# ============================================================
+#  清除 30 天以上紀錄
+# ============================================================
 def cleanup_old_chat_history(days=30):
+    if db is None or ChatHistory is None:
+        return
+
     try:
-        if db is None:
-            return
         cutoff = datetime.utcnow() - timedelta(days=days)
         ChatHistory.query.filter(ChatHistory.created_at < cutoff).delete()
         db.session.commit()
+        logging.info("🧹 已清除過期 chat_history")
     except Exception as e:
-        logging.warning(f"cleanup_old_chat_history failed: {e}")
+        logging.warning(f"⚠️ 清除舊紀錄失敗：{e}")

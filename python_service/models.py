@@ -4,20 +4,20 @@ from datetime import datetime
 
 db = SQLAlchemy()
 
-# =====================================
-# 👤 使用者模型（對應 users 資料表）
-# =====================================
+# ============================================================
+# 👤 使用者模型（users）
+# ============================================================
 class User(db.Model):
     __tablename__ = 'users'
 
     user_id = db.Column(db.Integer, primary_key=True)
     account = db.Column(db.String(64), unique=True, nullable=False)
     username = db.Column(db.String(64), nullable=False)
-    password = db.Column(db.String(255), nullable=False)  # 增加長度以容納密碼 hash
+    password = db.Column(db.String(255), nullable=False)
     email = db.Column(db.String(128), unique=True, nullable=False)
     phone = db.Column(db.String(32))
 
-    # ✅ 設定欄位（對應使用者設定頁）
+    # 使用者通知設定
     news_category_subscription = db.Column(db.Boolean, default=False)
     expert_analysis_subscription = db.Column(db.Boolean, default=False)
     weekly_report_subscription = db.Column(db.Boolean, default=False)
@@ -36,7 +36,7 @@ class User(db.Model):
         return check_password_hash(self.password, password)
 
     # -------------------------------------------------------------
-    # 轉換成字典（回傳前端用）
+    # 回傳給前端用
     # -------------------------------------------------------------
     def to_dict(self):
         return {
@@ -54,9 +54,10 @@ class User(db.Model):
             'privacy_policy_agreed': self.privacy_policy_agreed,
         }
 
-# =====================================
-# 📰 文章模型（對應 articles 資料表）
-# =====================================
+
+# ============================================================
+# 📰 文章模型（articles）
+# ============================================================
 class Article(db.Model):
     __tablename__ = 'articles'
 
@@ -65,16 +66,13 @@ class Article(db.Model):
     content = db.Column(db.Text)
     category = db.Column(db.String(100))
     media_name = db.Column(db.String(255))
-    published_time = db.Column(db.DateTime, default=datetime.utcnow)  # ✅ 對應 created_at → published_time
+    published_time = db.Column(db.DateTime, default=datetime.utcnow)
     reliability_score = db.Column(db.Float, default=0.0)
     source_link = db.Column(db.String(500))
 
-    # 🔗 關聯留言
+    # 關聯留言
     comments = db.relationship('Comment', backref='article', lazy=True)
 
-    # -------------------------------------------------------------
-    # 可信度分數 → 文字標籤（供前端顯示）
-    # -------------------------------------------------------------
     @property
     def credibility_label(self):
         labels = {
@@ -88,9 +86,6 @@ class Article(db.Model):
         score = round(self.reliability_score or 0)
         return labels.get(score, "未知")
 
-    # -------------------------------------------------------------
-    # 將文章轉換成 dict（搜尋、排行、詳情共用）
-    # -------------------------------------------------------------
     def to_dict(self):
         return {
             "id": self.article_id,
@@ -98,15 +93,17 @@ class Article(db.Model):
             "content": self.content,
             "category": self.category,
             "media_name": self.media_name,
-            "published_time": self.published_time.strftime("%Y-%m-%d %H:%M") if self.published_time else None,
+            "published_time": self.published_time.strftime("%Y-%m-%d %H:%M")
+            if self.published_time else None,
             "reliability_score": self.reliability_score,
-            "credibility_label": self.credibility_label,  # ✅ 新增：直接輸出可信度文字
+            "credibility_label": self.credibility_label,
             "source_link": self.source_link,
         }
 
-# =====================================
-# 💬 留言模型（對應 comments 資料表）
-# =====================================
+
+# ============================================================
+# 💬 留言模型（comments）
+# ============================================================
 class Comment(db.Model):
     __tablename__ = 'comments'
 
@@ -118,23 +115,23 @@ class Comment(db.Model):
     user_identity = db.Column(db.String(100), default="匿名用戶")
     commented_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-    # 🔗 關聯使用者
     user = db.relationship('User', backref=db.backref('comments', lazy=True))
 
     def to_dict(self):
-        """轉成字典（提供前端顯示用）"""
         return {
             "comment_id": self.comment_id,
             "article_id": self.article_id,
             "user_id": self.user_id,
-            "author": self.user_identity or "匿名用戶",
+            "author": self.user_identity,
             "content": self.content,
-            "time": self.commented_at.strftime("%Y-%m-%d %H:%M") if self.commented_at else None,
+            "time": self.commented_at.strftime("%Y-%m-%d %H:%M")
+            if self.commented_at else None,
         }
 
-# =====================================
-# 💬 舉報（對應 reports 資料表）
-# =====================================
+
+# ============================================================
+# 🚨 舉報模型（reports）
+# ============================================================
 class Reports(db.Model):
     __tablename__ = "reports"
 
@@ -144,3 +141,28 @@ class Reports(db.Model):
     reason = db.Column(db.Text, nullable=False)
     status = db.Column(db.String(20), default="待審核")
     reported_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+# ============================================================
+# 🧠 聊天紀錄（chat_history）
+# ============================================================
+class ChatHistory(db.Model):
+    __tablename__ = "chat_history"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.user_id"), nullable=True)
+
+    query_text = db.Column(db.Text, nullable=False)
+    ai_acc_result = db.Column(db.JSON, nullable=True)
+    gemini_result = db.Column(db.JSON, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "query": self.query_text,
+            "ai_acc_result": self.ai_acc_result,
+            "gemini_result": self.gemini_result,
+            "created_at": self.created_at.isoformat()
+        }

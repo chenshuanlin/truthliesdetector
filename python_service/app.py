@@ -10,7 +10,7 @@ from config import Config
 from models import db
 
 # ============================================================
-# 🔥 強制載入 .env（避免讀不到）
+# 強制載入 .env
 # ============================================================
 from dotenv import load_dotenv
 
@@ -18,20 +18,21 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ENV_PATH = os.path.join(BASE_DIR, ".env")
 load_dotenv(ENV_PATH)
 
+# Debug 印出環境變數
 print("DEBUG >>> GEMINI_API_KEY =", os.getenv("GEMINI_API_KEY"))
 print("DEBUG >>> MODEL_PATH =", os.getenv("MODEL_PATH"))
 
 # ============================================================
-# OpenCV — 可裝可不裝
+# OpenCV（可裝可不裝）
 # ============================================================
 try:
-    import cv2  # type: ignore
+    import cv2
 except Exception:
     cv2 = None
-    logging.warning("⚠️ OpenCV 未載入（cv2=None）。如需圖片分析，請安裝 opencv-python-headless")
+    logging.warning("⚠️ OpenCV 未載入")
 
 # ============================================================
-# 匯入第一批 Blueprint（後端 API）
+# 匯入第一批 Blueprint
 # ============================================================
 from routes_auth import bp as auth_bp
 from routes_stats import bp as stats_bp
@@ -63,11 +64,13 @@ def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
 
+    # Debug 開關
     app.config["SQLALCHEMY_ECHO"] = True
     app.config["DEBUG"] = True
 
     logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s [%(levelname)s]: %(message)s"
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s]: %(message)s"
     )
 
     print("📡 使用資料庫:", app.config["SQLALCHEMY_DATABASE_URI"])
@@ -76,7 +79,9 @@ def create_app():
 
     db.init_app(app)
 
-    # ---- 註冊第一批 API ----
+    # -------------------------------------------------------
+    # 註冊 API（統一 prefix="/api"）
+    # -------------------------------------------------------
     app.register_blueprint(auth_bp, url_prefix="/api")
     app.register_blueprint(stats_bp, url_prefix="/api")
     app.register_blueprint(settings_bp, url_prefix="/api")
@@ -84,19 +89,24 @@ def create_app():
     app.register_blueprint(search_logs_bp, url_prefix="/api")
     app.register_blueprint(articles_bp, url_prefix="/api")
     app.register_blueprint(comments_bp, url_prefix="/api")
-    app.register_blueprint(reports_bp, url_prefix="/api/reports")
+    app.register_blueprint(reports_bp, url_prefix="/api")
 
-    # ---- 註冊第二批（可選）----
+    # -------------------------------------------------------
+    # 修正：chat / analyze 統一放到 /api 底下
+    # -------------------------------------------------------
     if chat_bp:
-        app.register_blueprint(chat_bp, url_prefix="/")
+        app.register_blueprint(chat_bp, url_prefix="/api")
     if analyze_bp:
-        app.register_blueprint(analyze_bp, url_prefix="/")
+        app.register_blueprint(analyze_bp, url_prefix="/api")
     if history_bp:
         app.register_blueprint(history_bp, url_prefix="/api")
 
-    # ---- 註冊圖片分析 API ----
+    # -------------------------------------------------------
+    # 圖片分析 API
+    # -------------------------------------------------------
     register_image_route(app)
 
+    # -------------------------------------------------------
     @app.route("/api/ping")
     def ping():
         return jsonify({"ok": True, "message": "Flask API 運作正常 🚀"})
@@ -105,7 +115,7 @@ def create_app():
 
 
 # ============================================================
-# 圖片載入工具 — URL / Base64
+# 以下為圖片處理工具（你原本的內容保留）
 # ============================================================
 def _load_image_from_url(url: str):
     if cv2 is None:
@@ -130,17 +140,13 @@ def _load_image_from_base64(b64: str):
         return None
 
 
-# ============================================================
-# 圖片品質分析（cv2 存在才會執行）
-# ============================================================
 def _analyze_image(img):
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     variance_laplacian = float(cv2.Laplacian(gray, cv2.CV_64F).var())
-
     hist = cv2.calcHist([gray], [0], None, [256], [0, 256]).flatten()
+
     hist_norm = hist / (hist.sum() + 1e-6)
     entropy = float(-(hist_norm * np.log(hist_norm + 1e-9)).sum())
-
     edges = cv2.Canny(gray, 100, 200)
     edge_ratio = float(edges.mean())
 
@@ -156,29 +162,19 @@ def _analyze_image(img):
     }
 
 
-# ============================================================
-# 註冊影像 API
-# ============================================================
 def register_image_route(app):
-    @app.post("/analyze-image")
+    @app.post("/api/analyze-image")
     def analyze_image():
         if cv2 is None:
-            return (
-                jsonify(
-                    {
-                        "ok": False,
-                        "error": "伺服器未安裝 OpenCV，無法進行圖像品質分析。",
-                    }
-                ),
-                503,
-            )
+            return jsonify(
+                {"ok": False, "error": "伺服器未安裝 OpenCV"}
+            ), 503
 
         data = request.get_json(silent=True) or {}
         url = data.get("url")
         image_b64 = data.get("imageBase64")
 
         img = _load_image_from_url(url) if url else _load_image_from_base64(image_b64)
-
         if img is None:
             return jsonify({"ok": False, "error": "無法載入圖片"}), 400
 
