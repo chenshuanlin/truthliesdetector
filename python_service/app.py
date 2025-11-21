@@ -3,27 +3,24 @@ import logging
 import base64
 import numpy as np
 import requests
-
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from config import Config
 from models import db
 
 # ============================================================
-# 強制載入 .env
+# 載入 .env
 # ============================================================
 from dotenv import load_dotenv
-
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ENV_PATH = os.path.join(BASE_DIR, ".env")
 load_dotenv(ENV_PATH)
 
-# Debug 印出環境變數
 print("DEBUG >>> GEMINI_API_KEY =", os.getenv("GEMINI_API_KEY"))
 print("DEBUG >>> MODEL_PATH =", os.getenv("MODEL_PATH"))
 
 # ============================================================
-# OpenCV（可裝可不裝）
+# OpenCV（允許未安裝）
 # ============================================================
 try:
     import cv2
@@ -31,8 +28,9 @@ except Exception:
     cv2 = None
     logging.warning("⚠️ OpenCV 未載入")
 
+
 # ============================================================
-# 匯入第一批 Blueprint
+# 匯入 API Blueprints（第一批）
 # ============================================================
 from routes_auth import bp as auth_bp
 from routes_stats import bp as stats_bp
@@ -42,18 +40,18 @@ from routes_search_logs import bp as search_logs_bp
 from routes_articles import bp as articles_bp
 from routes_comments import bp as comments_bp
 from routes_reports import bp as reports_bp
+from routes_chat import chat_bp   # <-- ⭐你的新版 Chat API
+
 
 # ============================================================
-# 匯入第二批 Blueprint（chat / analyze / history）
+# 匯入第二批（Chat 歷史 / 分析 API）
 # ============================================================
 try:
     from routes.history_routes import bp as history_bp
-    from routes.chat_routes import chat_bp
     from routes.analyze_routes import analyze_bp
 except Exception as e:
     logging.error(f"[routes] ❌ 第二套路由載入失敗：{e}")
     history_bp = None
-    chat_bp = None
     analyze_bp = None
 
 
@@ -64,7 +62,6 @@ def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
 
-    # Debug 開關
     app.config["SQLALCHEMY_ECHO"] = True
     app.config["DEBUG"] = True
 
@@ -80,7 +77,7 @@ def create_app():
     db.init_app(app)
 
     # -------------------------------------------------------
-    # 註冊 API（統一 prefix="/api"）
+    # 註冊所有 API 到 /api
     # -------------------------------------------------------
     app.register_blueprint(auth_bp, url_prefix="/api")
     app.register_blueprint(stats_bp, url_prefix="/api")
@@ -91,22 +88,18 @@ def create_app():
     app.register_blueprint(comments_bp, url_prefix="/api")
     app.register_blueprint(reports_bp, url_prefix="/api")
 
-    # -------------------------------------------------------
-    # 修正：chat / analyze 統一放到 /api 底下
-    # -------------------------------------------------------
-    if chat_bp:
-        app.register_blueprint(chat_bp, url_prefix="/api")
+    # ⭐ Chat API，只註冊一次（重要！！！）
+    app.register_blueprint(chat_bp, url_prefix="/api")
+
+    # ⭐ 其他補充 API
     if analyze_bp:
         app.register_blueprint(analyze_bp, url_prefix="/api")
     if history_bp:
         app.register_blueprint(history_bp, url_prefix="/api")
 
-    # -------------------------------------------------------
-    # 圖片分析 API
-    # -------------------------------------------------------
+    # 圖片 API
     register_image_route(app)
 
-    # -------------------------------------------------------
     @app.route("/api/ping")
     def ping():
         return jsonify({"ok": True, "message": "Flask API 運作正常 🚀"})
@@ -115,7 +108,7 @@ def create_app():
 
 
 # ============================================================
-# 以下為圖片處理工具（你原本的內容保留）
+# 圖片工具
 # ============================================================
 def _load_image_from_url(url: str):
     if cv2 is None:
@@ -166,9 +159,7 @@ def register_image_route(app):
     @app.post("/api/analyze-image")
     def analyze_image():
         if cv2 is None:
-            return jsonify(
-                {"ok": False, "error": "伺服器未安裝 OpenCV"}
-            ), 503
+            return jsonify({"ok": False, "error": "伺服器未安裝 OpenCV"}), 503
 
         data = request.get_json(silent=True) or {}
         url = data.get("url")
@@ -194,6 +185,6 @@ if __name__ == "__main__":
             db.create_all()
             print("✅ 資料表初始化完成")
         except Exception as e:
-            print("❌ 資料庫連線失敗:", e)
+            print("❌ 資料庫初始化失敗:", e)
 
     app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=False)

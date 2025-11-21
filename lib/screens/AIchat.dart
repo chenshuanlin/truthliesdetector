@@ -22,8 +22,17 @@ class Message {
 }
 
 class AIchat extends StatefulWidget {
+  /// 1️⃣ 新聊天必填的初始問題
   final String initialQuery;
+
+  /// 2️⃣ 拍照查證用（可為 null）
   final Uint8List? capturedImageBytes;
+
+  /// 3️⃣ 歷史紀錄回顧用（可為 null）
+  final int? sessionId;
+  final List<dynamic>? existingConversation; // DB 的 conversation
+  final String? createdAt; // 建立時間（目前只是備用）
+  final String? title; // 查證標題（目前只是備用）
 
   static const String route = "/aichat";
 
@@ -31,6 +40,10 @@ class AIchat extends StatefulWidget {
     super.key,
     required this.initialQuery,
     this.capturedImageBytes,
+    this.sessionId,
+    this.existingConversation,
+    this.createdAt,
+    this.title,
   });
 
   @override
@@ -41,88 +54,76 @@ class _AIchatState extends State<AIchat> {
   final List<Message> _messages = [];
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scroll = ScrollController();
-  bool _isTyping = false;
-  bool _isFirst = true;
 
-  // API base
+  int? _sessionId;
+
   String get apiBase =>
       kIsWeb ? "http://127.0.0.1:5000/api" : "http://10.0.2.2:5000/api";
-
-  // 關鍵字用來判斷是否查證
-  final verifyKeywords = [
-    "真假",
-    "查證",
-    "可信",
-    "可信度",
-    "來源",
-    "真的假的",
-    "詐騙",
-    "假新聞",
-    "謠言",
-    "real",
-    "fake",
-    "fact",
-  ];
 
   @override
   void initState() {
     super.initState();
-    _sendInitial();
+
+    // ⭐ 如果有帶 sessionId + conversation 進來 → 歷史回顧模式
+    if (widget.sessionId != null && widget.existingConversation != null) {
+      _loadFromHistory();
+    } else {
+      // ⭐ 一般新查證模式 → call /chat/start
+      _startSession();
+    }
   }
 
-  // 初次訊息（必定查證）
-  void _sendInitial() {
-    if (widget.capturedImageBytes != null) {
-      _messages.add(
-        Message(
-          text: "請協助分析這張圖片。",
-          sender: "user",
-          timestamp: DateTime.now(),
-          imageBytes: widget.capturedImageBytes,
-        ),
-      );
+  // ============================================================
+  // A. 從歷史紀錄載入（不打 /chat/start）
+  // ============================================================
+  void _loadFromHistory() {
+    print("📜 從歷史紀錄載入對話，sessionId = ${widget.sessionId}");
+
+    _sessionId = widget.sessionId;
+
+    final List<dynamic> conv = widget.existingConversation ?? [];
+
+    for (final item in conv) {
+      if (item is! Map) continue;
+
+      final sender = item["sender"]?.toString() ?? "system";
+      final text = item["text"]?.toString() ?? "";
+      final tsStr = item["timestamp"]?.toString();
+
+      DateTime ts;
+      try {
+        ts = tsStr != null ? DateTime.parse(tsStr) : DateTime.now();
+      } catch (_) {
+        ts = DateTime.now();
+      }
+
+      _messages.add(Message(text: text, sender: sender, timestamp: ts));
     }
 
-    _messages.add(
-      Message(
-        text: widget.initialQuery,
-        sender: "user",
-        timestamp: DateTime.now(),
-      ),
-    );
-
-    _sendToAI(widget.initialQuery, image: widget.capturedImageBytes);
-  }
-
-  bool _needVerify(String txt) {
-    if (_isFirst) return true;
-    return verifyKeywords.any((kw) => txt.contains(kw));
-  }
-
-  // 核心：送給後端 API
-  Future<void> _sendToAI(String text, {Uint8List? image}) async {
-    setState(() => _isTyping = true);
+    setState(() {});
     _scrollDown();
+  }
 
-    int? userId;
-    try {
-      userId = Provider.of<UserProvider>(
-        context,
-        listen: false,
-      ).currentUser?.userId;
-    } catch (_) {}
+  // ============================================================
+  // B. 新聊天：建立 Session — /chat/start
+  // ============================================================
+  Future<void> _startSession() async {
+    print("🚀 開始建立新 Session...");
 
-    bool doVerify = _needVerify(text) || image != null;
+    final userId = Provider.of<UserProvider>(
+      context,
+      listen: false,
+    ).currentUser?.userId;
 
-    final url = doVerify
-        ? "$apiBase/chat" //
-        : "$apiBase/chat/text";
+    final url = "$apiBase/chat/start";
 
-    final body = {"message": text, "user_id": userId};
+    final body = {"message": widget.initialQuery, "user_id": userId};
 
-    if (image != null) {
+    if (widget.capturedImageBytes != null) {
       body["ai_acc_result"] = {
-        "vision_result": {"imageBase64": base64Encode(image)},
+        "vision_result": {
+          "imageBase64": base64Encode(widget.capturedImageBytes!),
+        },
       };
     }
 
@@ -133,90 +134,121 @@ class _AIchatState extends State<AIchat> {
         body: jsonEncode(body),
       );
 
-      if (resp.statusCode == 200) {
-        final data = jsonDecode(resp.body);
+      print("📥 /chat/start 回應：${resp.body}");
 
-        // ---------- 查證路徑 ----------
-        if (doVerify) {
-          final combined = data["gemini_result"]["scores"]["combined"];
-          String level = combined["level"] ?? "未知";
-          double score = (combined["score"] ?? 0.0).toDouble();
+      final data = jsonDecode(resp.body);
+      _sessionId = data["session_id"];
 
-          // Step 1: 顯示可信度框
-          _messages.add(
-            Message(
-              text: "可信度：$level（${score.toStringAsFixed(2)}）",
-              sender: "system",
-              timestamp: DateTime.now(),
-            ),
-          );
+      // user 初始訊息
+      _messages.add(
+        Message(
+          text: widget.initialQuery,
+          sender: "user",
+          timestamp: DateTime.now(),
+          imageBytes: widget.capturedImageBytes,
+        ),
+      );
 
-          // Step 2: AI 回覆
-          String reply = data["gemini_result"]["reply"] ?? "（AI 無回覆）";
-          _messages.add(
-            Message(text: reply, sender: "ai", timestamp: DateTime.now()),
-          );
-        }
-        // ---------- 聊天路徑 ----------
-        else {
-          String reply = data["reply"] ?? "（AI 無回覆）";
-          _messages.add(
-            Message(text: reply, sender: "ai", timestamp: DateTime.now()),
-          );
-        }
-      } else {
+      // system 可信度
+      if (data["ai_acc_result"] != null) {
+        final level = data["ai_acc_result"]["level"] ?? "未知";
+        final score = data["ai_acc_result"]["score"] ?? 0;
+
         _messages.add(
           Message(
-            text: "後端錯誤：${resp.statusCode}",
-            sender: "ai",
+            text: "可信度：$level（$score）",
+            sender: "system",
             timestamp: DateTime.now(),
           ),
         );
       }
-    } catch (_) {
-      _messages.add(
-        Message(
-          text: "⚠️ 無法連線後端，請確認伺服器狀態。",
-          sender: "ai",
-          timestamp: DateTime.now(),
-        ),
-      );
-    }
 
-    _isFirst = false;
-    setState(() => _isTyping = false);
-    _scrollDown();
+      // AI 回覆
+      final reply = data["reply"] ?? "(AI 無回覆)";
+      _messages.add(
+        Message(text: reply, sender: "ai", timestamp: DateTime.now()),
+      );
+
+      setState(() {});
+      _scrollDown();
+    } catch (e) {
+      print("❌ /chat/start error: $e");
+    }
   }
 
-  // 使用者送出訊息
+  // ============================================================
+  // C. 續問 — /chat/append
+  // ============================================================
+  Future<void> _sendAppend(String text) async {
+    if (_sessionId == null) {
+      print("❌ session_id 為 null，無法 append");
+      return;
+    }
+
+    print("📤 傳送 /chat/append：$text");
+
+    final url = "$apiBase/chat/append";
+    final body = {"session_id": _sessionId, "message": text};
+
+    try {
+      final resp = await http.post(
+        Uri.parse(url),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode(body),
+      );
+
+      print("📥 /chat/append 回應：${resp.body}");
+
+      final data = jsonDecode(resp.body);
+      final reply = data["reply"] ?? "(AI 無回覆)";
+
+      _messages.add(
+        Message(text: reply, sender: "ai", timestamp: DateTime.now()),
+      );
+
+      setState(() {});
+      _scrollDown();
+    } catch (e) {
+      print("❌ /chat/append error: $e");
+    }
+  }
+
+  // ============================================================
+  // 送出使用者訊息
+  // ============================================================
   void _send() {
     final txt = _controller.text.trim();
     if (txt.isEmpty) return;
 
+    print("💬 使用者送出：$txt");
+
     _messages.add(
       Message(text: txt, sender: "user", timestamp: DateTime.now()),
     );
+
     _controller.clear();
+    setState(() {});
     _scrollDown();
 
-    _sendToAI(txt);
+    _sendAppend(txt);
   }
 
+  // 自動捲動到底部
   void _scrollDown() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scroll.hasClients) {
         _scroll.animateTo(
           _scroll.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
+          duration: const Duration(milliseconds: 250),
           curve: Curves.easeOut,
         );
       }
     });
   }
 
-  // ------------------------------------------------------------
+  // ============================================================
   // UI
-  // ------------------------------------------------------------
+  // ============================================================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -224,7 +256,7 @@ class _AIchatState extends State<AIchat> {
       appBar: AppBar(
         backgroundColor: AppColors.primaryGreen,
         title: const Text(
-          "真假小助手（對話模式）",
+          "真假小助手",
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         leading: IconButton(
@@ -238,17 +270,8 @@ class _AIchatState extends State<AIchat> {
             child: ListView.builder(
               controller: _scroll,
               padding: const EdgeInsets.all(12),
-              itemCount: _messages.length + (_isTyping ? 1 : 0),
-              itemBuilder: (context, index) {
-                if (index < _messages.length) {
-                  return _bubble(_messages[index]);
-                } else {
-                  return const Padding(
-                    padding: EdgeInsets.all(8),
-                    child: Text("AI 正在輸入…"),
-                  );
-                }
-              },
+              itemCount: _messages.length,
+              itemBuilder: (_, index) => _bubble(_messages[index]),
             ),
           ),
           _inputBar(),
@@ -257,15 +280,16 @@ class _AIchatState extends State<AIchat> {
     );
   }
 
-  // ------------------------------------------------------------
-  // 美化後的對話框
-  // ------------------------------------------------------------
+  // ============================================================
+  // 對話訊息泡泡
+  // ============================================================
   Widget _bubble(Message msg) {
     final isUser = msg.sender == "user";
     final isSystem = msg.sender == "system";
 
-    Color bubbleColor = isUser ? AppColors.primaryGreen : Colors.white;
-    if (isSystem) bubbleColor = Colors.yellow.shade200;
+    Color bubbleColor = isUser
+        ? AppColors.primaryGreen
+        : (isSystem ? Colors.yellow.shade200 : Colors.white);
 
     return Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
@@ -274,33 +298,7 @@ class _AIchatState extends State<AIchat> {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: bubbleColor,
-          gradient: isUser
-              ? LinearGradient(
-                  colors: [
-                    AppColors.primaryGreen,
-                    AppColors.primaryGreen.withOpacity(0.85),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                )
-              : null,
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(18),
-            topRight: const Radius.circular(18),
-            bottomLeft: isUser
-                ? const Radius.circular(18)
-                : const Radius.circular(6),
-            bottomRight: isUser
-                ? const Radius.circular(6)
-                : const Radius.circular(18),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.08),
-              blurRadius: 6,
-              offset: const Offset(0, 3),
-            ),
-          ],
+          borderRadius: BorderRadius.circular(14),
         ),
         constraints: BoxConstraints(
           maxWidth: MediaQuery.of(context).size.width * 0.78,
@@ -318,15 +316,13 @@ class _AIchatState extends State<AIchat> {
             Text(
               msg.text,
               style: TextStyle(
-                fontSize: 15,
-                fontWeight: isSystem ? FontWeight.bold : FontWeight.normal,
                 color: isUser ? Colors.white : Colors.black87,
-                height: 1.35,
+                fontWeight: isSystem ? FontWeight.bold : FontWeight.normal,
               ),
             ),
             const SizedBox(height: 4),
             Text(
-              "${msg.timestamp.hour.toString().padLeft(2, "0")}:${msg.timestamp.minute.toString().padLeft(2, "0")}",
+              "${msg.timestamp.hour.toString().padLeft(2, '0')}:${msg.timestamp.minute.toString().padLeft(2, '0')}",
               style: TextStyle(
                 color: isUser ? Colors.white70 : Colors.black45,
                 fontSize: 10,
@@ -338,29 +334,20 @@ class _AIchatState extends State<AIchat> {
     );
   }
 
-  // ------------------------------------------------------------
-  // 輸入列
-  // ------------------------------------------------------------
+  // ============================================================
+  // 底部輸入區
+  // ============================================================
   Widget _inputBar() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 8,
-            offset: const Offset(0, -2),
-          ),
-        ],
-      ),
+      padding: const EdgeInsets.all(12),
+      decoration: const BoxDecoration(color: Colors.white),
       child: Row(
         children: [
           Expanded(
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14),
               decoration: BoxDecoration(
-                color: Colors.grey.shade100,
+                color: Colors.grey.shade200,
                 borderRadius: BorderRadius.circular(24),
               ),
               child: TextField(

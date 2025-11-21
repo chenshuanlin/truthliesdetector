@@ -2,10 +2,13 @@ from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.ext.mutable import MutableDict, MutableList
+
 db = SQLAlchemy()
 
 # ============================================================
-# 👤 使用者模型（users）
+# Users
 # ============================================================
 class User(db.Model):
     __tablename__ = 'users'
@@ -17,7 +20,7 @@ class User(db.Model):
     email = db.Column(db.String(128), unique=True, nullable=False)
     phone = db.Column(db.String(32))
 
-    # 使用者通知設定
+    # 通知設定
     news_category_subscription = db.Column(db.Boolean, default=False)
     expert_analysis_subscription = db.Column(db.Boolean, default=False)
     weekly_report_subscription = db.Column(db.Boolean, default=False)
@@ -26,18 +29,14 @@ class User(db.Model):
     expert_response_alert = db.Column(db.Boolean, default=False)
     privacy_policy_agreed = db.Column(db.Boolean, default=False)
 
-    # -------------------------------------------------------------
-    # 密碼處理
-    # -------------------------------------------------------------
+    # 密碼
     def set_password(self, password):
         self.password = generate_password_hash(password)
 
     def check_password(self, password):
         return check_password_hash(self.password, password)
 
-    # -------------------------------------------------------------
-    # 回傳給前端用
-    # -------------------------------------------------------------
+    # 輸出格式
     def to_dict(self):
         return {
             'user_id': self.user_id,
@@ -56,7 +55,7 @@ class User(db.Model):
 
 
 # ============================================================
-# 📰 文章模型（articles）
+# Articles
 # ============================================================
 class Article(db.Model):
     __tablename__ = 'articles'
@@ -70,7 +69,6 @@ class Article(db.Model):
     reliability_score = db.Column(db.Float, default=0.0)
     source_link = db.Column(db.String(500))
 
-    # 關聯留言
     comments = db.relationship('Comment', backref='article', lazy=True)
 
     @property
@@ -102,13 +100,13 @@ class Article(db.Model):
 
 
 # ============================================================
-# 💬 留言模型（comments）
+# Comments
 # ============================================================
 class Comment(db.Model):
     __tablename__ = 'comments'
 
     comment_id = db.Column(db.Integer, primary_key=True)
-    article_id = db.Column(db.Integer, db.ForeignKey('articles.article_id'), nullable=False)
+    article_id = db.Column(db.Integer, db.ForeignKey('articles.article_id'))
     user_id = db.Column(db.Integer, db.ForeignKey('users.user_id'), nullable=True)
 
     content = db.Column(db.Text, nullable=False)
@@ -130,7 +128,7 @@ class Comment(db.Model):
 
 
 # ============================================================
-# 🚨 舉報模型（reports）
+# Reports
 # ============================================================
 class Reports(db.Model):
     __tablename__ = "reports"
@@ -144,25 +142,36 @@ class Reports(db.Model):
 
 
 # ============================================================
-# 🧠 聊天紀錄（chat_history）
+# ChatHistory（AI Chat + 查證 + 對話紀錄）
 # ============================================================
 class ChatHistory(db.Model):
     __tablename__ = "chat_history"
 
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("users.user_id"), nullable=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.user_id"))
 
     query_text = db.Column(db.Text, nullable=False)
-    ai_acc_result = db.Column(db.JSON, nullable=True)
-    gemini_result = db.Column(db.JSON, nullable=True)
+
+    # ⭐ dict → MutableDict + JSONB
+    ai_acc_result = db.Column(MutableDict.as_mutable(JSONB), nullable=True)
+    gemini_result = db.Column(MutableDict.as_mutable(JSONB), nullable=True)
+
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    # ⭐ list → MutableList + JSONB（續問才能正常 append）
+    conversation = db.Column(
+        MutableList.as_mutable(JSONB),
+        nullable=False,
+        default=list
+    )
 
     def to_dict(self):
         return {
             "id": self.id,
             "user_id": self.user_id,
-            "query": self.query_text,
+            "query_text": self.query_text,
             "ai_acc_result": self.ai_acc_result,
             "gemini_result": self.gemini_result,
-            "created_at": self.created_at.isoformat()
+            "created_at": self.created_at.isoformat(),
+            "conversation": self.conversation or []
         }

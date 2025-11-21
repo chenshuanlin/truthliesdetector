@@ -1,23 +1,31 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
+// Providers
 import 'package:truthliesdetector/providers/user_provider.dart';
+
+// Screens
 import 'package:truthliesdetector/screens/AIacc.dart';
 import 'package:truthliesdetector/screens/login_page.dart';
 import 'package:truthliesdetector/screens/register_page.dart';
-//import 'package:truthliesdetector/screens/Article_page.dart';
 import 'package:truthliesdetector/screens/search_page.dart';
 import 'package:truthliesdetector/screens/collect_page.dart';
 import 'package:truthliesdetector/screens/history_page.dart';
 import 'package:truthliesdetector/screens/profile_page.dart';
 import 'package:truthliesdetector/screens/home_page.dart';
 import 'package:truthliesdetector/screens/splash_page.dart';
-import 'package:truthliesdetector/themes/app_colors.dart';
 import 'package:truthliesdetector/screens/AIchat.dart';
-import 'package:truthliesdetector/themes/app_drawer.dart';
-import 'package:truthliesdetector/screens/ai_report_page.dart'; // <<< 新增：導入 AI 報告頁面
+import 'package:truthliesdetector/screens/ai_report_page.dart';
 import 'package:truthliesdetector/screens/settings_page.dart';
+
+// Theme / Widgets
+import 'package:truthliesdetector/themes/app_colors.dart';
+import 'package:truthliesdetector/themes/app_drawer.dart';
 import 'package:truthliesdetector/themes/ball.dart';
+
+// Tools
 import 'package:screenshot/screenshot.dart';
+import 'package:truthliesdetector/route_observer.dart'; // ★★★ 必須加這個
 
 void main() {
   runApp(const MyApp());
@@ -29,31 +37,42 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (context) => UserProvider(),
+      create: (_) => UserProvider(),
       child: MaterialApp(
         title: 'Truths and Lies Detector',
+        debugShowCheckedModeBanner: false,
+
+        // ★★★ 使用 routeObserver
+        navigatorObservers: [routeObserver],
+
         theme: ThemeData(
           primaryColor: AppColors.primaryGreen,
           colorScheme: const ColorScheme.light(primary: AppColors.primaryGreen),
           fontFamily: 'NotoSansSC',
           useMaterial3: true,
         ),
+
         initialRoute: SplashPage.route,
+
         routes: {
-          SplashPage.route: (context) => const SplashPage(),
-          LoginPage.route: (context) => const LoginPage(),
-          RegisterPage.route: (context) => const RegisterPage(),
-          MainLayout.route: (context) => const MainLayout(),
-          SearchPage.route: (context) => const SearchPage(),
-          CollectPage.route: (context) => const CollectPage(),
-          HistoryPage.route: (context) => const HistoryPage(),
-          ProfilePage.route: (context) => const ProfilePage(),
-          AIchat.route: (context) => const AIchat(initialQuery: ''),
-          AiReportPage.route: (context) =>
-              const AiReportPage(), // <<< 新增：註冊 AI 報告頁面路由
-          SettingsPage.route: (context) => const SettingsPage(),
+          SplashPage.route: (_) => const SplashPage(),
+          LoginPage.route: (_) => const LoginPage(),
+          RegisterPage.route: (_) => const RegisterPage(),
+          MainLayout.route: (_) => const MainLayout(),
+          SearchPage.route: (_) => const SearchPage(),
+          CollectPage.route: (_) => const CollectPage(),
+          HistoryPage.route: (_) => const HistoryPage(),
+          ProfilePage.route: (_) => const ProfilePage(),
+
+          // ❗ 不能 const — AIchat 需要參數
+          AIchat.route: (_) => AIchat(initialQuery: ""),
+
+          // ChatDetailPage 是動態，不走 named route
+          "/chat_detail": (_) => const Placeholder(),
+
+          AiReportPage.route: (_) => const AiReportPage(),
+          SettingsPage.route: (_) => const SettingsPage(),
         },
-        debugShowCheckedModeBanner: false,
       ),
     );
   }
@@ -71,23 +90,18 @@ class _MainLayoutState extends State<MainLayout> {
   int _currentIndex = 0;
   final ScreenshotController _screenshotController = ScreenshotController();
 
-  // 新增狀態變數來控制懸浮球的顯示
   bool _showFab = true;
 
   final List<Widget> _pages = [
-    const HomePage(),
-    const AiReportPage(), // Index 1: 將「發現」頁面替換為 AiReportPage (AI報告與趨勢分析)
-    // TODO: 如果要將中間按鈕 (Index 2) 導向新的 AI 報告頁面，請將下一行註解，並取消再下一行的註解
-    // const AiReportPage(),
-    const AIacc(),
-    const SearchPage(),
-    const ProfilePage(),
+    const HomePage(), // 0
+    const AiReportPage(), // 1
+    const AIacc(), // 2
+    const SearchPage(), // 3
+    const ProfilePage(), // 4
   ];
 
   void _onItemTapped(int index) {
-    setState(() {
-      _currentIndex = index;
-    });
+    setState(() => _currentIndex = index);
   }
 
   @override
@@ -101,25 +115,26 @@ class _MainLayoutState extends State<MainLayout> {
           IconButton(
             icon: const Icon(Icons.notifications_none),
             onPressed: () {
-              // 導航到設定頁面
               Navigator.of(context).pushNamed(SettingsPage.route);
             },
           ),
         ],
       ),
+
       drawer: AppDrawer(
         mainGreen: const Color(0xFF8BA88E),
         onItemTapped: _onItemTapped,
       ),
+
       body: Screenshot(
         controller: _screenshotController,
         child: Stack(
           children: [
-            // 使用 Padding 包裹 IndexedStack，以在底部留出空間
             Padding(
               padding: const EdgeInsets.only(bottom: 80),
               child: IndexedStack(index: _currentIndex, children: _pages),
             ),
+
             Positioned(
               bottom: 0,
               left: 0,
@@ -129,30 +144,20 @@ class _MainLayoutState extends State<MainLayout> {
                 onTap: _onItemTapped,
               ),
             ),
-            // 根據 _showFab 狀態來顯示或隱藏懸浮球
+
             if (_showFab)
               FloatingActionMenu(
                 screenshotController: _screenshotController,
                 onTap: _onItemTapped,
-                // 提供 onClose 回呼函式來隱藏懸浮球
-                onClose: () {
-                  setState(() {
-                    _showFab = false;
-                  });
-                },
+                onClose: () => setState(() => _showFab = false),
               ),
 
-            // 增加一個按鈕來重新顯示懸浮球
             if (!_showFab)
               Positioned(
                 bottom: 100,
                 right: 20,
                 child: FloatingActionButton(
-                  onPressed: () {
-                    setState(() {
-                      _showFab = true;
-                    });
-                  },
+                  onPressed: () => setState(() => _showFab = true),
                   child: const Icon(Icons.apps),
                 ),
               ),
@@ -163,7 +168,6 @@ class _MainLayoutState extends State<MainLayout> {
   }
 }
 
-/// ⬇️ 自訂導覽列 Widget (保持不變)
 class CustomBottomNavBar extends StatelessWidget {
   final int currentIndex;
   final Function(int) onTap;
@@ -176,13 +180,13 @@ class CustomBottomNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Color mainGreen = const Color(0xFF8BA88E);
+    const Color mainGreen = Color(0xFF8BA88E);
 
     return Container(
       height: 60,
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         color: mainGreen,
-        borderRadius: const BorderRadius.only(
+        borderRadius: BorderRadius.only(
           topLeft: Radius.circular(25),
           topRight: Radius.circular(25),
         ),
@@ -193,13 +197,14 @@ class CustomBottomNavBar extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _buildNavItem(Icons.home, "首頁", 0, mainGreen),
-              _buildNavItem(Icons.access_time, "發現", 1, mainGreen),
+              _item(Icons.home, "首頁", 0),
+              _item(Icons.access_time, "發現", 1),
               const SizedBox(width: 60),
-              _buildNavItem(Icons.search, "新聞搜尋", 3, mainGreen),
-              _buildNavItem(Icons.person, "我的", 4, mainGreen),
+              _item(Icons.search, "新聞搜尋", 3),
+              _item(Icons.person, "我的", 4),
             ],
           ),
+
           Positioned(
             top: -25,
             left: MediaQuery.of(context).size.width / 2 - 45,
@@ -228,26 +233,20 @@ class CustomBottomNavBar extends StatelessWidget {
     );
   }
 
-  Widget _buildNavItem(
-    IconData icon,
-    String label,
-    int index,
-    Color mainGreen,
-  ) {
-    bool isSelected = currentIndex == index;
+  Widget _item(IconData icon, String label, int index) {
+    bool active = currentIndex == index;
     return GestureDetector(
       onTap: () => onTap(index),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, color: Colors.white, size: 24),
+          Icon(icon, color: Colors.white),
           const SizedBox(height: 4),
           Text(
             label,
             style: TextStyle(
-              fontSize: 12,
               color: Colors.white,
-              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              fontWeight: active ? FontWeight.bold : FontWeight.normal,
             ),
           ),
         ],

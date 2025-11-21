@@ -175,6 +175,13 @@ class ApiService {
       password: '',
       email: map['email'] as String,
       phone: map['phone'] as String?,
+      newsCategorySubscription: map['news_category_subscription'] ?? false,
+      expertAnalysisSubscription: map['expert_analysis_subscription'] ?? false,
+      weeklyReportSubscription: map['weekly_report_subscription'] ?? false,
+      fakeNewsAlert: map['fake_news_alert'] ?? false,
+      trendingTopicAlert: map['trending_topic_alert'] ?? false,
+      expertResponseAlert: map['expert_response_alert'] ?? false,
+      privacyPolicyAgreed: map['privacy_policy_agreed'] ?? false,
     );
   }
 

@@ -1,131 +1,179 @@
 # =====================================================================
-# database.py  — 最終穩定版，完全對應你的 models.py
+# database.py — 最終正式版（支援 Chat Session、續問、Mutable JSONB）
 # =====================================================================
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
+from sqlalchemy.orm.attributes import flag_modified
 
-# ============================================================
-#  正確匯入 models 中的 SQLAlchemy db 與 ChatHistory / User
-# ============================================================
-try:
-    from models import db, ChatHistory, User
-except Exception as e:
-    logging.error(f"❌ 無法從 models 匯入資料庫模型：{e}")
-    db = None
-    ChatHistory = None
-    User = None
+from models import db, ChatHistory, User
 
 
 # ============================================================
-#  初始化資料庫
+# 初始化資料庫
 # ============================================================
 def init_db():
-    if db:
-        try:
-            db.create_all()
-            logging.info("✅ DB 初始化完成")
-        except Exception as e:
-            logging.error(f"❌ DB 初始化失敗：{e}")
-    else:
-        logging.warning("⚠️ DB 未正確載入，略過初始化")
-
-
-# ============================================================
-#  寫入聊天紀錄
-# ============================================================
-def insert_chat_history(query_text, ai_acc_result, gemini_result, user_id=None):
-    print(f"[insert_chat_history] user_id={user_id}")
-
-    # DB 未初始化 → 跳過
-    if db is None or ChatHistory is None:
-        print("❌ DB 或模型未載入，跳過 insert")
-        return
-
-    # ============================================================
-    #  驗證 user_id（避免 FK 錯誤）
-    # ============================================================
-    user_id_to_use = None
-    if user_id is not None:
-        try:
-            exists = db.session.get(User, user_id)
-            if exists:
-                user_id_to_use = user_id
-            else:
-                print(f"⚠️ user_id {user_id} 不存在 → 改為 NULL")
-        except Exception as e:
-            print(f"⚠️ 檢查 user_id 時發生錯誤：{e}")
-
-    # ============================================================
-    #  寫入資料庫
-    # ============================================================
     try:
-        record = ChatHistory(
-            user_id=user_id_to_use,
+        db.create_all()
+        logging.info("✅ DB 初始化完成")
+    except Exception as e:
+        logging.error(f"❌ DB 初始化失敗：{e}")
+
+
+# ============================================================
+# 1️⃣ 建立新的聊天 Session（第一次查證）
+# ============================================================
+def insert_chat_session(user_id, query_text, ai_acc_result, gemini_result, conversation):
+    """
+    新增一筆 chat session：
+    - user_id
+    - query_text
+    - ai_acc_result（可信度分析）
+    - gemini_result（AI 回覆）
+    - conversation（完整對話 list）
+    """
+    try:
+        # 檢查使用者是否存在
+        user_obj = db.session.get(User, user_id) if user_id else None
+        if not user_obj:
+            logging.warning(f"⚠️ user_id {user_id} 不存在，設為 NULL")
+            user_id = None
+
+        session = ChatHistory(
+            user_id=user_id,
             query_text=query_text,
             ai_acc_result=ai_acc_result,
             gemini_result=gemini_result,
-            created_at=datetime.utcnow(),
+            conversation=conversation,
+            created_at=datetime.utcnow()
         )
 
-        db.session.add(record)
+        db.session.add(session)
         db.session.commit()
 
-        print(f"✅ chat_history 寫入成功 id={record.id}")
+        logging.info(f"✅ 新增 session 完成 id={session.id}")
+        return session.id
 
     except Exception as e:
-        print(f"❌ 無法寫入 chat_history：{e}")
-        import traceback
-        print(traceback.format_exc())
+        logging.error(f"❌ insert_chat_session 失敗：{e}")
+        db.session.rollback()
+        return None
 
 
 # ============================================================
-#  讀取聊天紀錄
+# 2️⃣ 追加對話（續問）
 # ============================================================
-def get_chat_history(limit=50, user_id=None):
-    if db is None or ChatHistory is None:
-        return []
+def append_chat_conversation(session_id, message_item):
+    """
+    message_item 樣式：
+    {
+        "sender": "user/ai/system",
+        "text": "...",
+        "timestamp": "2025-01-01T12:33:00"
+    }
+    """
 
     try:
-        q = ChatHistory.query.order_by(ChatHistory.created_at.desc())
+        session = db.session.get(ChatHistory, session_id)
+        if not session:
+            logging.warning(f"⚠️ append 失敗：session_id {session_id} 不存在")
+            return False
 
-        if user_id is not None:
-            try:
-                uid = int(user_id)
-                q = q.filter_by(user_id=uid)
-            except:
-                pass
+        # 確保 conversation 為 list
+        if not isinstance(session.conversation, list):
+            logging.warning(f"⚠️ conversation 非 list，自動初始化")
+            session.conversation = []
 
-        records = q.limit(limit).all()
+        # 加入訊息
+        session.conversation.append(message_item)
+
+        # ⭐⭐⭐ 確保 SQLAlchemy 強制更新 JSONB 欄位
+        flag_modified(session, "conversation")
+
+        db.session.commit()
+        logging.info(f"📌 conversation append 成功 session_id={session_id}")
+        return True
+
+    except Exception as e:
+        logging.error(f"❌ append_chat_conversation 失敗：{e}")
+        db.session.rollback()
+        return False
+
+
+# ============================================================
+# 3️⃣ 查詢最新 N 筆 Session（AIacc 使用）
+# ============================================================
+def get_recent_chat_sessions(user_id, limit=5):
+    """
+    回傳格式：
+    [
+        {
+            "id": ...,
+            "query_text": "...",
+            "created_at": "...",
+            "conversation": [...],
+            "ai_acc_result": {...},
+            "gemini_result": {...}
+        }
+    ]
+    """
+    try:
+        user_obj = db.session.get(User, user_id) if user_id else None
+        if not user_obj:
+            logging.warning(f"⚠️ user_id {user_id} 不存在 → 回傳空陣列")
+            return []
+
+        rows = (
+            ChatHistory.query
+            .filter_by(user_id=user_id)
+            .order_by(ChatHistory.created_at.desc())
+            .limit(limit)
+            .all()
+        )
 
         return [
             {
                 "id": r.id,
                 "user_id": r.user_id,
-                "query": r.query_text,
+                "query_text": r.query_text,
+                "created_at": r.created_at.isoformat(),
+                "conversation": r.conversation or [],
                 "ai_acc_result": r.ai_acc_result,
                 "gemini_result": r.gemini_result,
-                "created_at": r.created_at.isoformat(),
             }
-            for r in records
+            for r in rows
         ]
 
     except Exception as e:
-        logging.error(f"❌ 讀取 chat_history 失敗：{e}")
+        logging.error(f"❌ get_recent_chat_sessions 失敗：{e}")
         return []
 
 
 # ============================================================
-#  清除 30 天以上紀錄
+# 4️⃣（保留）一般歷史查詢
 # ============================================================
-def cleanup_old_chat_history(days=30):
-    if db is None or ChatHistory is None:
-        return
-
+def get_chat_history(limit=50, user_id=None):
     try:
-        cutoff = datetime.utcnow() - timedelta(days=days)
-        ChatHistory.query.filter(ChatHistory.created_at < cutoff).delete()
-        db.session.commit()
-        logging.info("🧹 已清除過期 chat_history")
+        q = ChatHistory.query.order_by(ChatHistory.created_at.desc())
+
+        if user_id:
+            q = q.filter_by(user_id=user_id)
+
+        rows = q.limit(limit).all()
+
+        return [
+            {
+                "id": r.id,
+                "user_id": r.user_id,
+                "query_text": r.query_text,
+                "ai_acc_result": r.ai_acc_result,
+                "gemini_result": r.gemini_result,
+                "created_at": r.created_at.isoformat(),
+                "conversation": r.conversation or [],
+            }
+            for r in rows
+        ]
+
     except Exception as e:
-        logging.warning(f"⚠️ 清除舊紀錄失敗：{e}")
+        logging.error(f"❌ get_chat_history 失敗：{e}")
+        return []
