@@ -1,17 +1,17 @@
 import 'dart:convert';
 import 'dart:typed_data';
-import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:http/http.dart' as http;
-import 'package:provider/provider.dart';
-import 'package:truthliesdetector/themes/app_colors.dart';
-import '../providers/user_provider.dart';
 
+import 'package:flutter/material.dart';
+import 'package:flutter_overlay_window/flutter_overlay_window.dart';
+import 'package:http/http.dart' as http;
+import 'package:truthliesdetector/themes/app_colors.dart';
+
+/// 訊息結構
 class Message {
   final String text;
-  final String sender; // user | ai | system
-  final Uint8List? imageBytes;
+  final String sender; // 'user' | 'ai' | 'system'
   final DateTime timestamp;
+  final Uint8List? imageBytes;
 
   Message({
     required this.text,
@@ -22,15 +22,19 @@ class Message {
 }
 
 class AIchat extends StatefulWidget {
-  final String initialQuery;
+  final String? initialQuery;
   final Uint8List? capturedImageBytes;
+  final Map<String, dynamic>? backendResult; // 🔥 查證傳入
+  final int? userId; // 🔥 用於載入聊天紀錄
 
   static const String route = "/aichat";
 
   const AIchat({
     super.key,
-    required this.initialQuery,
+    this.initialQuery,
     this.capturedImageBytes,
+    this.backendResult,
+    this.userId,
   });
 
   @override
@@ -41,41 +45,66 @@ class _AIchatState extends State<AIchat> {
   final List<Message> _messages = [];
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scroll = ScrollController();
-  bool _isTyping = false;
-  bool _isFirst = true;
 
-  // API base
-  String get apiBase =>
-      kIsWeb ? "http://127.0.0.1:5000/api" : "http://10.0.2.2:5000/api";
+  bool _isLoadingHistory = false;
 
-  // 關鍵字用來判斷是否查證
-  final verifyKeywords = [
-    "真假",
-    "查證",
-    "可信",
-    "可信度",
-    "來源",
-    "真的假的",
-    "詐騙",
-    "假新聞",
-    "謠言",
-    "real",
-    "fake",
-    "fact",
-  ];
+  String? lastGeminiSummary;
+
+  // API base URL
+  final String apiBase =
+      const String.fromEnvironment('API_BASE', defaultValue: 'http://127.0.0.1:5000/api');
 
   @override
   void initState() {
     super.initState();
-    _sendInitial();
+
+    _setupOverlayListener();
+
+    if (widget.backendResult != null) {
+      // 有新的查證結果 → 開啟新對話
+      _initNewChatWithResult();
+    } else {
+      // 無查證結果 → 載入舊紀錄
+      _loadChatHistory();
+    }
   }
 
-  // 初次訊息（必定查證）
-  void _sendInitial() {
-    if (widget.capturedImageBytes != null) {
+  // ------------------------------------------------------------
+  // 🔥 懸浮球事件監聽
+  // ------------------------------------------------------------
+  void _setupOverlayListener() {
+    FlutterOverlayWindow.overlayListener.listen((event) {
+      try {
+        final data = jsonDecode(event);
+
+        if (data["type"] == "result") {
+          final credibility = data['credibility'] ?? "未知";
+          final summary = data['summary'] ?? "無摘要";
+
+          _messages.add(
+            Message(
+              text: "🟢 懸浮球查證結果\n可信度：$credibility\n$summary",
+              sender: "ai",
+              timestamp: DateTime.now(),
+            ),
+          );
+
+          _scrollDown();
+        }
+      } catch (e) {
+        debugPrint("⚠️ 懸浮球資料解析失敗: $e");
+      }
+    });
+  }
+
+  // ------------------------------------------------------------
+  // 🔥 新查證結果 → 新對話
+  // ------------------------------------------------------------
+  void _initNewChatWithResult() {
+    if (widget.initialQuery != null && widget.initialQuery!.isNotEmpty) {
       _messages.add(
         Message(
-          text: "請協助分析這張圖片。",
+          text: widget.initialQuery!,
           sender: "user",
           timestamp: DateTime.now(),
           imageBytes: widget.capturedImageBytes,
@@ -83,113 +112,93 @@ class _AIchatState extends State<AIchat> {
       );
     }
 
-    _messages.add(
-      Message(
-        text: widget.initialQuery,
-        sender: "user",
-        timestamp: DateTime.now(),
-      ),
-    );
+    if (widget.backendResult != null) {
+      final replyText = _formatAIResult(widget.backendResult!);
 
-    _sendToAI(widget.initialQuery, image: widget.capturedImageBytes);
-  }
-
-  bool _needVerify(String txt) {
-    if (_isFirst) return true;
-    return verifyKeywords.any((kw) => txt.contains(kw));
-  }
-
-  // 核心：送給後端 API
-  Future<void> _sendToAI(String text, {Uint8List? image}) async {
-    setState(() => _isTyping = true);
-    _scrollDown();
-
-    int? userId;
-    try {
-      userId = Provider.of<UserProvider>(
-        context,
-        listen: false,
-      ).currentUser?.userId;
-    } catch (_) {}
-
-    bool doVerify = _needVerify(text) || image != null;
-
-    final url = doVerify
-        ? "$apiBase/chat" //
-        : "$apiBase/chat/text";
-
-    final body = {"message": text, "user_id": userId};
-
-    if (image != null) {
-      body["ai_acc_result"] = {
-        "vision_result": {"imageBase64": base64Encode(image)},
-      };
-    }
-
-    try {
-      final resp = await http.post(
-        Uri.parse(url),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode(body),
-      );
-
-      if (resp.statusCode == 200) {
-        final data = jsonDecode(resp.body);
-
-        // ---------- 查證路徑 ----------
-        if (doVerify) {
-          final combined = data["gemini_result"]["scores"]["combined"];
-          String level = combined["level"] ?? "未知";
-          double score = (combined["score"] ?? 0.0).toDouble();
-
-          // Step 1: 顯示可信度框
-          _messages.add(
-            Message(
-              text: "可信度：$level（${score.toStringAsFixed(2)}）",
-              sender: "system",
-              timestamp: DateTime.now(),
-            ),
-          );
-
-          // Step 2: AI 回覆
-          String reply = data["gemini_result"]["reply"] ?? "（AI 無回覆）";
-          _messages.add(
-            Message(text: reply, sender: "ai", timestamp: DateTime.now()),
-          );
-        }
-        // ---------- 聊天路徑 ----------
-        else {
-          String reply = data["reply"] ?? "（AI 無回覆）";
-          _messages.add(
-            Message(text: reply, sender: "ai", timestamp: DateTime.now()),
-          );
-        }
-      } else {
-        _messages.add(
-          Message(
-            text: "後端錯誤：${resp.statusCode}",
-            sender: "ai",
-            timestamp: DateTime.now(),
-          ),
-        );
-      }
-    } catch (_) {
       _messages.add(
         Message(
-          text: "⚠️ 無法連線後端，請確認伺服器狀態。",
+          text: replyText,
           sender: "ai",
           timestamp: DateTime.now(),
         ),
       );
-    }
 
-    _isFirst = false;
-    setState(() => _isTyping = false);
-    _scrollDown();
+      lastGeminiSummary = replyText;
+    }
   }
 
-  // 使用者送出訊息
-  void _send() {
+  // ------------------------------------------------------------
+  // 🔥 從後端載入歷史紀錄
+  // ------------------------------------------------------------
+  Future<void> _loadChatHistory() async {
+    final uid = widget.userId ?? 0;
+
+    setState(() => _isLoadingHistory = true);
+
+    try {
+      final resp = await http.get(
+        Uri.parse("$apiBase/chat/history?user_id=$uid&limit=30"),
+      );
+
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body);
+        final records = List<Map<String, dynamic>>.from(data["records"] ?? []);
+
+        _messages.clear();
+        for (final item in records.reversed) {
+          final query = item["query_text"] ?? "";
+          final gemini = item["gemini_result"] ?? {};
+          final reply = gemini["reply"] ?? "";
+          final created =
+              DateTime.tryParse(item["created_at"] ?? "") ?? DateTime.now();
+
+          if (query.isNotEmpty) {
+            _messages.add(Message(text: query, sender: "user", timestamp: created));
+          }
+
+          if (reply.isNotEmpty) {
+            _messages.add(Message(text: reply, sender: "ai", timestamp: created));
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint("❌ 載入歷史錯誤: $e");
+    }
+
+    setState(() => _isLoadingHistory = false);
+  }
+
+  // ------------------------------------------------------------
+  // 🔥 格式化 AI 查證結果
+  // ------------------------------------------------------------
+  String _formatAIResult(Map<String, dynamic> r) {
+    if (r.containsKey("gemini_result")) {
+      final g = r["gemini_result"];
+      final mode = g["mode"] ?? "文字";
+
+      final scores = g["scores"] ?? {};
+      final combined = scores["combined"] ?? {};
+
+      return """
+🧠 Gemini 模式：$mode
+📊 綜合可信度：${combined["level"] ?? "未知"}（${combined["score"] ?? "—"}）
+
+${g["reply"] ?? ""}
+${g["comment"] ?? ""}
+""";
+    }
+
+    // fallback: 舊格式
+    return """
+📊 可信度：${r["level"] ?? "未知"}（${r["score"] ?? "—"}）
+${r["summary"] ?? ""}
+""";
+  }
+
+  // ------------------------------------------------------------
+  // ✉️ 送出訊息 + 延續 Gemini 對話
+  // ------------------------------------------------------------
+  Future<void> _sendMessage() async {
     final txt = _controller.text.trim();
     if (txt.isEmpty) return;
 
@@ -199,14 +208,56 @@ class _AIchatState extends State<AIchat> {
     _controller.clear();
     _scrollDown();
 
-    _sendToAI(txt);
+    try {
+      final resp = await http.post(
+        Uri.parse("$apiBase/chat"),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({
+          "user_id": widget.userId ?? 0,
+          "message": txt,
+          "context": lastGeminiSummary ?? "",
+        }),
+      );
+
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body);
+        final replyText = _formatAIResult(data);
+
+        _messages.add(
+          Message(
+            text: replyText,
+            sender: "ai",
+            timestamp: DateTime.now(),
+          ),
+        );
+
+        lastGeminiSummary = replyText;
+      } else {
+        _messages.add(Message(
+          text: "⚠️ 伺服器回應錯誤 ${resp.statusCode}",
+          sender: "ai",
+          timestamp: DateTime.now(),
+        ));
+      }
+    } catch (e) {
+      _messages.add(Message(
+        text: "❌ 連線錯誤：$e",
+        sender: "ai",
+        timestamp: DateTime.now(),
+      ));
+    }
+
+    _scrollDown();
   }
 
+  // ------------------------------------------------------------
+  // 🔽 自動滾動底部
+  // ------------------------------------------------------------
   void _scrollDown() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    Future.delayed(const Duration(milliseconds: 200), () {
       if (_scroll.hasClients) {
         _scroll.animateTo(
-          _scroll.position.maxScrollExtent,
+          _scroll.position.maxScrollExtent + 80,
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeOut,
         );
@@ -215,18 +266,58 @@ class _AIchatState extends State<AIchat> {
   }
 
   // ------------------------------------------------------------
-  // UI
+  // 💬 氣泡 UI
+  // ------------------------------------------------------------
+  Widget _bubble(Message msg) {
+    final isUser = msg.sender == "user";
+    final color = isUser ? AppColors.primaryGreen : Colors.grey.shade200;
+    final textColor = isUser ? Colors.white : Colors.black87;
+
+    return Align(
+      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        constraints: const BoxConstraints(maxWidth: 320),
+        child: Column(
+          crossAxisAlignment:
+              isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          children: [
+            if (msg.imageBytes != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Image.memory(
+                  msg.imageBytes!,
+                  height: 150,
+                  fit: BoxFit.cover,
+                ),
+              ),
+            Text(msg.text, style: TextStyle(color: textColor, height: 1.4)),
+            const SizedBox(height: 4),
+            Text(
+              "${msg.timestamp.hour.toString().padLeft(2, '0')}:${msg.timestamp.minute.toString().padLeft(2, '0')}",
+              style: const TextStyle(fontSize: 10, color: Colors.black45),
+            )
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ------------------------------------------------------------
+  // 🧩 主 UI
   // ------------------------------------------------------------
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey.shade100,
+      backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: AppColors.primaryGreen,
-        title: const Text(
-          "真假小助手（對話模式）",
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
+        title: const Text("AI 聊天助手", style: TextStyle(color: Colors.white)),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
           onPressed: () => Navigator.pop(context),
@@ -234,154 +325,42 @@ class _AIchatState extends State<AIchat> {
       ),
       body: Column(
         children: [
+          if (_isLoadingHistory)
+            const Padding(
+              padding: EdgeInsets.all(12),
+              child: CircularProgressIndicator(color: AppColors.primaryGreen),
+            ),
+
           Expanded(
             child: ListView.builder(
               controller: _scroll,
-              padding: const EdgeInsets.all(12),
-              itemCount: _messages.length + (_isTyping ? 1 : 0),
-              itemBuilder: (context, index) {
-                if (index < _messages.length) {
-                  return _bubble(_messages[index]);
-                } else {
-                  return const Padding(
-                    padding: EdgeInsets.all(8),
-                    child: Text("AI 正在輸入…"),
-                  );
-                }
-              },
+              itemCount: _messages.length,
+              itemBuilder: (_, i) => _bubble(_messages[i]),
             ),
           ),
-          _inputBar(),
-        ],
-      ),
-    );
-  }
 
-  // ------------------------------------------------------------
-  // 美化後的對話框
-  // ------------------------------------------------------------
-  Widget _bubble(Message msg) {
-    final isUser = msg.sender == "user";
-    final isSystem = msg.sender == "system";
-
-    Color bubbleColor = isUser ? AppColors.primaryGreen : Colors.white;
-    if (isSystem) bubbleColor = Colors.yellow.shade200;
-
-    return Align(
-      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 6),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: bubbleColor,
-          gradient: isUser
-              ? LinearGradient(
-                  colors: [
-                    AppColors.primaryGreen,
-                    AppColors.primaryGreen.withOpacity(0.85),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                )
-              : null,
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(18),
-            topRight: const Radius.circular(18),
-            bottomLeft: isUser
-                ? const Radius.circular(18)
-                : const Radius.circular(6),
-            bottomRight: isUser
-                ? const Radius.circular(6)
-                : const Radius.circular(18),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.08),
-              blurRadius: 6,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.78,
-        ),
-        child: Column(
-          crossAxisAlignment: isUser
-              ? CrossAxisAlignment.end
-              : CrossAxisAlignment.start,
-          children: [
-            if (msg.imageBytes != null)
-              ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: Image.memory(msg.imageBytes!, height: 150),
-              ),
-            Text(
-              msg.text,
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: isSystem ? FontWeight.bold : FontWeight.normal,
-                color: isUser ? Colors.white : Colors.black87,
-                height: 1.35,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              "${msg.timestamp.hour.toString().padLeft(2, "0")}:${msg.timestamp.minute.toString().padLeft(2, "0")}",
-              style: TextStyle(
-                color: isUser ? Colors.white70 : Colors.black45,
-                fontSize: 10,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ------------------------------------------------------------
-  // 輸入列
-  // ------------------------------------------------------------
-  Widget _inputBar() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 8,
-            offset: const Offset(0, -2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: TextField(
-                controller: _controller,
-                decoration: const InputDecoration(
-                  border: InputBorder.none,
-                  hintText: "輸入訊息…",
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            color: Colors.grey.shade100,
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _controller,
+                    decoration: const InputDecoration(
+                      hintText: "輸入訊息…",
+                      border: InputBorder.none,
+                    ),
+                    onSubmitted: (_) => _sendMessage(),
+                  ),
                 ),
-                onSubmitted: (_) => _send(),
-              ),
+                IconButton(
+                  icon: const Icon(Icons.send, color: AppColors.primaryGreen),
+                  onPressed: _sendMessage,
+                ),
+              ],
             ),
-          ),
-          const SizedBox(width: 8),
-          CircleAvatar(
-            radius: 24,
-            backgroundColor: AppColors.primaryGreen,
-            child: IconButton(
-              icon: const Icon(Icons.send, color: Colors.white),
-              onPressed: _send,
-            ),
-          ),
+          )
         ],
       ),
     );
