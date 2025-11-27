@@ -195,20 +195,27 @@ class _AiReportPageState extends State<AiReportPage> {
   List<BarData> _buildWeeklyChartData(List<dynamic> weeklyReports) {
     if (weeklyReports.isEmpty) {
       return [
-        BarData(2, 3, '一'),
-        BarData(3, 4, '二'),
-        BarData(2, 2, '三'),
-        BarData(3, 5, '四'),
-        BarData(2, 3, '五'),
-        BarData(2, 2, '六'),
-        BarData(1, 2, '日'),
+        BarData(0, 0, '一'),
+        BarData(0, 0, '二'),
+        BarData(0, 0, '三'),
+        BarData(0, 0, '四'),
+        BarData(0, 0, '五'),
+        BarData(0, 0, '六'),
+        BarData(0, 0, '日'),
       ];
     }
 
     return weeklyReports.map((report) {
-      final day = report['day'] as String? ?? '';
-      final verified = (report['verified'] as int? ?? 0).toDouble();
-      final suspicious = (report['suspicious'] as int? ?? 0).toDouble();
+      final verified = (report['verified'] is num)
+          ? (report['verified'] as num).toDouble()
+          : 0.0;
+
+      final suspicious = (report['suspicious'] is num)
+          ? (report['suspicious'] as num).toDouble()
+          : 0.0;
+
+      final day = report['day']?.toString() ?? '';
+
       return BarData(verified, suspicious, day);
     }).toList();
   }
@@ -408,16 +415,14 @@ class _AiReportPageState extends State<AiReportPage> {
 
   // MARK: Tab 0: 假訊息偵測 (包含 Bar Chart & Topics List)
   Widget _buildDetectionReportContent() {
-    // 週報數據: Bar Chart
-    final List<BarData> weeklyData = _reportData[0]?['chart_data'];
-
-    // 熱門主題數據: 完全動態從 API 取得
-    final List<dynamic> topCategories = _statsData?['topCategories'] ?? [];
+    final weeklyData = _reportData[0]?['chart_data'] ?? <BarData>[];
+    final List<dynamic> topCategories =
+        (_statsData?['topCategories'] as List<dynamic>? ?? []);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 1. 本週假訊息監測報告 (Bar Chart)
+        /// 1. 柱狀圖
         _buildVisualCard(
           title: '本週假訊息監測報告',
           onViewAll: () => _showFullReportModal(),
@@ -425,11 +430,11 @@ class _AiReportPageState extends State<AiReportPage> {
         ),
         const SizedBox(height: 15),
 
-        // 2. 關鍵指標卡片
+        /// 2. 三個統計卡片
         _buildMetricsCards(),
         const SizedBox(height: 15),
 
-        // 3. 熱門假訊息主題 (完全動態)
+        /// 3. 熱門假訊息主題
         _buildVisualCard(
           title: '熱門假訊息主題',
           child: Column(
@@ -437,13 +442,17 @@ class _AiReportPageState extends State<AiReportPage> {
                 ? topCategories.map<Widget>((cat) {
                     final name = cat['name']?.toString() ?? '';
                     final percent = cat['percentage']?.toString() ?? '';
-                    final color =
-                        (cat['percentage'] is num &&
-                            (cat['percentage'] as num) >= 30)
+
+                    final numVal = (cat['percentage'] is num)
+                        ? (cat['percentage'] as num)
+                        : 0;
+
+                    final color = numVal >= 30
                         ? AppColors.dangerRed
                         : AppColors.primaryGreen;
+
                     return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 6.0),
+                      padding: const EdgeInsets.symmetric(vertical: 6),
                       child: Row(
                         children: [
                           Container(
@@ -476,15 +485,14 @@ class _AiReportPageState extends State<AiReportPage> {
                       ),
                     );
                   }).toList()
-                : [
-                    const Text(
+                : const [
+                    Text(
                       '（本週無顯著主題）',
                       style: TextStyle(color: AppColors.userGray),
                     ),
                   ],
           ),
         ),
-        const SizedBox(height: 20),
       ],
     );
   }
@@ -509,76 +517,75 @@ class _AiReportPageState extends State<AiReportPage> {
 
   // 關鍵指標卡片
   Widget _buildMetricsCards() {
-    // 取用 API 數據（完全動態）
     final stats = _statsData ?? {};
     final weekly = (stats['weeklyReports'] as List<dynamic>? ?? []);
 
-    // 總數
     int sumVerified = 0;
     int sumSuspicious = 0;
+
     for (final r in weekly) {
       sumVerified += (r['verified'] as int? ?? 0);
       sumSuspicious += (r['suspicious'] as int? ?? 0);
     }
 
-    // 最近一天與前一天
+    // 近兩天資料（避免 weekly 空的崩潰）
     int lastV = 0, prevV = 0, lastS = 0, prevS = 0;
     if (weekly.isNotEmpty) {
-      final lr = weekly.last as Map<String, dynamic>;
-      lastV = (lr['verified'] as int? ?? 0);
-      lastS = (lr['suspicious'] as int? ?? 0);
+      lastV = (weekly.last['verified'] as int? ?? 0);
+      lastS = (weekly.last['suspicious'] as int? ?? 0);
     }
     if (weekly.length >= 2) {
-      final pr = weekly[weekly.length - 2] as Map<String, dynamic>;
-      prevV = (pr['verified'] as int? ?? 0);
-      prevS = (pr['suspicious'] as int? ?? 0);
+      prevV = (weekly[weekly.length - 2]['verified'] as int? ?? 0);
+      prevS = (weekly[weekly.length - 2]['suspicious'] as int? ?? 0);
     }
 
-    int pctDelta(int now, int prev) {
-      if (prev <= 0) return 0;
+    int calcDelta(int now, int prev) {
+      if (prev == 0) return 0;
       return (((now - prev) / prev) * 100).round();
     }
 
-    final verifiedDelta = pctDelta(lastV, prevV);
-    final suspiciousDelta = pctDelta(lastS, prevS);
+    final verifiedDelta = calcDelta(lastV, prevV);
+    final suspiciousDelta = calcDelta(lastS, prevS);
 
-    // AI 準確率（從 API 或以最近一天估算）
-    int aiAcc = stats['aiAccuracy'] is int
-        ? stats['aiAccuracy'] as int
-        : ((lastV + lastS) > 0 ? ((lastV * 100) / (lastV + lastS)).round() : 0);
+    // AI 辨識率
+    int aiAcc = 0;
+    if (stats['aiAccuracy'] is num) {
+      aiAcc = (stats['aiAccuracy'] as num).round();
+    } else {
+      final total = lastV + lastS;
+      aiAcc = total > 0 ? ((lastV / total) * 100).round() : 0;
+    }
 
-    // AI 準確率趨勢（近一日 vs 前一日）
+    // AI trend
     final prevAcc = (prevV + prevS) > 0
         ? ((prevV * 100) / (prevV + prevS))
         : aiAcc.toDouble();
+
     final aiDelta = (aiAcc - prevAcc).round();
 
-    String fmtDelta(int d) => (d >= 0 ? '+$d% \u25B2' : '$d% \u25BC');
+    String fmt(int d) => (d >= 0 ? '+$d% ▲' : '$d% ▼');
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        // 已確認假訊息 (DangerRed)
         _MetricCard(
           value: sumVerified.toString(),
           label: '已確認假訊息',
-          trend: fmtDelta(verifiedDelta),
+          trend: fmt(verifiedDelta),
           color: AppColors.dangerRed,
         ),
         const SizedBox(width: 10),
-        // 待查證訊息 (UserGray - 偏中性)
         _MetricCard(
           value: sumSuspicious.toString(),
           label: '待查證訊息',
-          trend: fmtDelta(suspiciousDelta),
+          trend: fmt(suspiciousDelta),
           color: AppColors.userGray,
         ),
         const SizedBox(width: 10),
-        // AI 辨識率 (PrimaryGreen2)
         _MetricCard(
           value: '$aiAcc%',
           label: 'AI 辨識率',
-          trend: fmtDelta(aiDelta),
+          trend: fmt(aiDelta),
           color: AppColors.primaryGreen2,
         ),
       ],

@@ -14,67 +14,86 @@ def load_verification_data() -> List[Dict]:
     載入所有 projectt/reports/raw_*.json 檔案
     回傳合併後的新聞條目列表
     """
-    # 找到 projectt/reports 資料夾（相對於此檔案）
+    # 找到可能的 reports 資料夾（相對於此檔案）
     current_dir = Path(__file__).parent
-    reports_dir = current_dir.parent / 'projectt' / 'reports'
-    
-    if not reports_dir.exists():
-        print(f"警告：找不到查證資料資料夾 {reports_dir}")
+
+    # 優先使用 projectt/reports（舊路徑），若不存在則 fallback 到 repo 根目錄下的 reports
+    candidate_paths = [
+        current_dir.parent / 'projectt' / 'reports',
+        current_dir.parent / 'reports'
+    ]
+
+    reports_dir = None
+    for p in candidate_paths:
+        if p.exists():
+            reports_dir = p
+            break
+
+    if reports_dir is None:
+        print(f"警告：找不到查證資料資料夾，嘗試的路徑: {candidate_paths}")
         return []
+    else:
+        print(f"使用查證資料資料夾: {reports_dir}")
     
     all_items = []
-    json_files = list(reports_dir.glob('raw_*.json'))
-    
+
+    # 支援同時從多個候選 reports 資料夾載入（例如 projectt/reports 與 repo_root/reports）
+    json_files = []
+    for p in candidate_paths:
+        if p.exists():
+            found = list((p).glob('raw_*.json'))
+            if found:
+                print(f"在 {p} 找到 {len(found)} 個 raw_*.json 檔案")
+                json_files.extend(found)
+
     if not json_files:
-        print(f"警告：在 {reports_dir} 找不到任何 raw_*.json 檔案")
+        print(f"警告：在候選資料夾中找不到任何 raw_*.json 檔案，嘗試的路徑: {candidate_paths}")
         return []
-    
-    print(f"找到 {len(json_files)} 個查證資料檔案")
-    
-    for json_file in json_files:
+
+    print(f"總共找到 {len(json_files)} 個 raw_*.json 檔案，開始載入...")
+
+    for json_file in sorted(json_files):
         try:
             with open(json_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
                 items = data.get('items', [])
                 all_items.extend(items)
-                print(f"  ✓ 載入 {json_file.name}: {len(items)} 則新聞")
+                print(f"  ✓ 載入 {json_file}: {len(items)} 則新聞")
         except Exception as e:
-            print(f"  ✗ 載入 {json_file.name} 失敗: {e}")
+            print(f"  ✗ 載入 {json_file} 失敗: {e}")
             continue
     
     print(f"總共載入 {len(all_items)} 則新聞")
     return all_items
 
 
-def classify_item(item: Dict) -> str:
-    """
-    將單一新聞條目分類為 'verified'（已查證）或 'unverified'（未查證）
-    
-    分類邏輯：
-    1. 優先依 short_judgement 關鍵字判斷
-    2. 輔助依 ann_features 的 evidence_quality 分數判斷
-    """
-    # 1. 依 short_judgement 判斷
-    sj = item.get('short_judgement', '')
-    
-    # 已查證的關鍵字（明確標示可信、假訊息、不實等）
+def classify_item(item):
+    sj = item.get("short_judgement") or item.get("shortJudgement") or ""
+
     verified_keywords = [
-        '可信', '查證', '已查證', '經查證', '假訊息', '不實', '謠言', 
+        '可信', '查證', '已查證', '經查證', '假訊息', '不實', '謠言',
         '經證實', '經查核', '經審查', '確認', '事實查核', '闢謠'
     ]
-    
+
+    # 1) 文字關鍵字判斷（若短判斷明確包含已查證相關文字，直接視為已查證）
     if any(k in sj for k in verified_keywords):
+        return "verified"
+
+    # 2) 若沒有文字提示，使用 ann_features 的分數作為輔助判斷
+    ann = item.get('ann_features') or {}
+    try:
+        evidence_quality = float(ann.get('evidence_quality') or 0)
+    except Exception:
+        evidence_quality = 0.0
+    try:
+        source_score = float(ann.get('source_entity_score') or 0)
+    except Exception:
+        source_score = 0.0
+
+    # 調整閾值：若證據品質與來源分數都 >= 0.6，視為已查證（提高可信度識別）
+    if evidence_quality >= 0.6 and source_score >= 0.6:
         return 'verified'
-    
-    # 2. 依 ann_features 分數輔助判斷
-    ann = item.get('ann_features', {})
-    evidence_quality = ann.get('evidence_quality', 0)
-    source_score = ann.get('source_entity_score', 0)
-    
-    # 若證據品質與來源分數都很高，視為已查證
-    if evidence_quality >= 0.8 and source_score >= 0.8:
-        return 'verified'
-    
+
     # 其餘視為未查證
     return 'unverified'
 

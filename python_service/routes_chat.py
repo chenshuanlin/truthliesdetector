@@ -14,20 +14,6 @@ from core.database import (
 chat_bp = Blueprint("chat_routes", __name__)
 
 
-# ------------------------------------------------------
-# 判斷是否為查證模式
-# ------------------------------------------------------
-VERIFY_KEYWORDS = [
-    "查證", "真假", "詐騙", "來源", "可信", "可信度",
-    "假新聞", "謠言", "fake", "real", "fact"
-]
-
-
-def need_verify(text: str) -> bool:
-    text = text.lower()
-    return any(kw in text for kw in VERIFY_KEYWORDS)
-
-
 # ======================================================
 # 1️⃣ /chat/start — 首次查證，建立 Session
 # ======================================================
@@ -41,7 +27,7 @@ def chat_start():
         if not message:
             return jsonify({"error": "message required"}), 400
 
-        # ---- Step1: 可信度分析 ----
+        # ---- Step1: AI acc 可信度分析 ----
         ai_acc = analyze_text(message)
         score = ai_acc.get("score", 0)
         level = ai_acc.get("level", "未知")
@@ -63,7 +49,7 @@ def chat_start():
             },
         }
 
-        # ---- Step3: 建立完整 conversation ----
+        # ---- Step3: conversation 初始化 ----
         now = datetime.now().isoformat()
         conversation = [
             {"sender": "user", "text": message, "timestamp": now},
@@ -93,7 +79,7 @@ def chat_start():
 
 
 # ======================================================
-# 2️⃣ /chat/append — 續問（延續同一個 Session）
+# 2️⃣ /chat/append — 每次都跑查證模式（新版）
 # ======================================================
 @chat_bp.route("/chat/append", methods=["POST"])
 def chat_append():
@@ -107,15 +93,14 @@ def chat_append():
         if not message:
             return jsonify({"error": "message required"}), 400
 
-        # ---- Step1: 找 Session ----
+        # ---- 找 Session ----
         session = db.session.get(ChatHistory, session_id)
         if not session:
             return jsonify({"error": "session not found"}), 404
 
-        # 最新 conversation（從 DB 讀）
         conversation = session.conversation or []
 
-        # ---- Step2: 先 append user ----
+        # ---- Step1: append user ----
         user_msg = {
             "sender": "user",
             "text": message,
@@ -123,35 +108,36 @@ def chat_append():
         }
         append_chat_conversation(session_id, user_msg)
 
-        # ---- Step3: 建 Gemini 上下文 ----
+        # ---- Step2: 建立 Gemini 上下文 ----
         context_list = []
-        for c in session.conversation:  # ⭐ 重新讀，包含剛 append 的 user
+        for c in session.conversation:  # 已包含 user_msg
             role = "user" if c["sender"] == "user" else "model"
             context_list.append({"role": role, "parts": [{"text": c["text"]}]})
 
-        # ---- Step4: 判斷查證 or 一般對話
-        if need_verify(message):
-            acc = analyze_text(message)
-            level = acc.get("level", "未知")
-            score = acc.get("score", 0)
+        # ===========================================================
+        # ⭐ Step3: 一律跑查證模式（不再需要 need_verify）
+        # ===========================================================
+        acc = analyze_text(message)
+        level = acc.get("level", "未知")
+        score = acc.get("score", 0)
 
-            sys_msg = {
-                "sender": "system",
-                "text": f"可信度：{level}（{score}）",
-                "timestamp": datetime.now().isoformat()
-            }
-            append_chat_conversation(session_id, sys_msg)
+        sys_msg = {
+            "sender": "system",
+            "text": f"可信度：{level}（{score}）",
+            "timestamp": datetime.now().isoformat()
+        }
+        append_chat_conversation(session_id, sys_msg)
 
-            verify_prompt = (
-                f"請查證以下內容：{message}\n"
-                f"可信度：{level}（{score}）"
-            )
-            reply = ask_gemini_chat(verify_prompt, context_list)
+        # Gemini 查證 Prompt
+        verify_prompt = (
+            f"請查證以下內容：{message}\n"
+            f"可信度：{level}（{score}）\n"
+            f"請用一般人都能理解的方式說明。"
+        )
 
-        else:
-            reply = ask_gemini_chat(message, context_list)
+        reply = ask_gemini_chat(verify_prompt, context_list)
 
-        # ---- Step5: append AI 回覆 ----
+        # ---- Step4: append AI 回覆 ----
         append_chat_conversation(
             session_id,
             {
@@ -169,15 +155,13 @@ def chat_append():
 
 
 # ======================================================
-# 3️⃣ /chat/recent — AIacc 使用的歷史查詢
+# 3️⃣ /chat/recent — 歷史查詢
 # ======================================================
 @chat_bp.route("/chat/recent", methods=["GET"])
 def chat_recent():
     try:
         user_id = request.args.get("user_id", type=int)
         limit = request.args.get("limit", 5, type=int)
-
-        print("🔥 /chat/recent 收到 user_id =", user_id)
 
         rows = get_recent_chat_sessions(user_id, limit)
         return jsonify({"records": rows, "status": "ok"})
