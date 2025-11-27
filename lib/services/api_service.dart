@@ -13,7 +13,7 @@ class ApiService {
       baseUrl ??
           const String.fromEnvironment(
             'API_BASE_URL',
-            defaultValue: 'http://10.0.2.2:5000',
+            defaultValue: 'http://192.168.0.125:5000',
           ),
     );
     return _instance!;

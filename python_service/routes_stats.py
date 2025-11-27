@@ -139,12 +139,36 @@ def _sentiment_from_titles(titles):
 @bp.get('/fake-news-stats')
 def fake_news_stats():
     import sys
+    from models import Article
     sys.stdout.flush()
     sys.stderr.write("[DEBUG-ERR] /fake-news-stats API 被調用\n")
     sys.stderr.flush()
     print("[DEBUG-OUT] /fake-news-stats API 被調用", flush=True)
-    # 改用真實查證資料
-    verified_count, unverified_count, verified_items, unverified_items = get_verification_stats()
+    
+    # 直接從資料庫讀取近7天文章
+    now = datetime.utcnow()
+    seven_days_ago = now - timedelta(days=7)
+    
+    articles = Article.query.filter(Article.published_time >= seven_days_ago).all()
+    
+    verified_items = []
+    unverified_items = []
+    
+    for article in articles:
+        item = {
+            'title': article.title,
+            'crawled_at': article.published_time.isoformat() if article.published_time else now.isoformat(),
+            'reliability_score': article.reliability_score or 0
+        }
+        # reliability_score 是 0-5 分制，>= 3.5 視為可信
+        if article.reliability_score and article.reliability_score >= 3.5:
+            verified_items.append(item)
+        else:
+            unverified_items.append(item)
+    
+    verified_count = len(verified_items)
+    unverified_count = len(unverified_items)
+    
     print(f"[DEBUG-OUT] verified_count={verified_count}, unverified_count={unverified_count}", flush=True)
     sys.stderr.write(f"[DEBUG-ERR] verified_count={verified_count}, unverified_count={unverified_count}\n")
     sys.stderr.flush()

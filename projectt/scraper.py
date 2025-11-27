@@ -601,7 +601,8 @@ def run_analysis_system():
             booster = lgb.Booster(model_file=str(model_path))
             print(f"[OK] 已載入模型: {model_path}")
         except Exception as e:
-            print(f"[ERROR] 載入模型失敗: {e}")
+            print(f"[WARN] 載入模型失敗: {e}")
+            print(f"[INFO] 將僅使用 Gemini AI 進行分析，跳過 LightGBM 模型預測")
             booster = None
 
     if args.query:
