@@ -1,26 +1,32 @@
+import sys
 import os
+import warnings
 import logging
 import base64
 import numpy as np
 import requests
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from config import Config
-from models import db
+from dotenv import load_dotenv
 
 # ============================================================
-# 載入 .env
+# Load .env
 # ============================================================
-from dotenv import load_dotenv
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ENV_PATH = os.path.join(BASE_DIR, ".env")
 load_dotenv(ENV_PATH)
 
-print("DEBUG >>> GEMINI_API_KEY =", os.getenv("GEMINI_API_KEY"))
-print("DEBUG >>> MODEL_PATH =", os.getenv("MODEL_PATH"))
+warnings.filterwarnings("ignore", category=UserWarning, module="jieba")
+
+# Extend paths for imports
+sys.path.extend([
+    BASE_DIR,
+    os.path.join(BASE_DIR, "core"),
+    os.path.join(BASE_DIR, "routes")
+])
 
 # ============================================================
-# OpenCV（允許未安裝）
+# Optional OpenCV
 # ============================================================
 try:
     import cv2
@@ -28,9 +34,8 @@ except Exception:
     cv2 = None
     logging.warning("⚠️ OpenCV 未載入")
 
-
 # ============================================================
-# 匯入 API Blueprints（第一批）
+# Import Blueprints (main API)
 # ============================================================
 from routes_auth import bp as auth_bp
 from routes_stats import bp as stats_bp
@@ -40,11 +45,14 @@ from routes_search_logs import bp as search_logs_bp
 from routes_articles import bp as articles_bp
 from routes_comments import bp as comments_bp
 from routes_reports import bp as reports_bp
-from routes_chat import chat_bp   # <-- ⭐你的新版 Chat API
-
 
 # ============================================================
-# 匯入第二批（Chat 歷史 / 分析 API）
+# Chat API — ⭐新版（必須使用 routes_chat）
+# ============================================================
+from routes_chat import chat_bp
+
+# ============================================================
+# Optional: Extra API
 # ============================================================
 try:
     from routes.history_routes import bp as history_bp
@@ -54,10 +62,22 @@ except Exception as e:
     history_bp = None
     analyze_bp = None
 
+# ============================================================
+# Database Core
+# ============================================================
+try:
+    from core.database import init_db, get_chat_history, cleanup_old_chat_history
+except Exception:
+    init_db = None
+    get_chat_history = None
+    cleanup_old_chat_history = None
 
-# ============================================================
-# 建立 Flask App
-# ============================================================
+from config import Config
+from models import db
+
+# =====================================================================
+# Create Flask App
+# =====================================================================
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
@@ -72,12 +92,13 @@ def create_app():
 
     print("📡 使用資料庫:", app.config["SQLALCHEMY_DATABASE_URI"])
 
+    # CORS
     CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 
     db.init_app(app)
 
     # -------------------------------------------------------
-    # 註冊所有 API 到 /api
+    # 註冊主 API 到 /api
     # -------------------------------------------------------
     app.register_blueprint(auth_bp, url_prefix="/api")
     app.register_blueprint(stats_bp, url_prefix="/api")
@@ -88,28 +109,55 @@ def create_app():
     app.register_blueprint(comments_bp, url_prefix="/api")
     app.register_blueprint(reports_bp, url_prefix="/api")
 
-    # ⭐ Chat API，只註冊一次（重要！！！）
+    # -------------------------------------------------------
+    # ⭐ Chat API — 正確掛載：/api/chat
+    # -------------------------------------------------------
     app.register_blueprint(chat_bp, url_prefix="/api")
 
+    # -------------------------------------------------------
     # ⭐ 其他補充 API
+    # -------------------------------------------------------
     if analyze_bp:
         app.register_blueprint(analyze_bp, url_prefix="/api")
+
     if history_bp:
         app.register_blueprint(history_bp, url_prefix="/api")
 
     # 圖片 API
     register_image_route(app)
 
+    # -------------------------------------------------------
+    # Ping
+    # -------------------------------------------------------
     @app.route("/api/ping")
     def ping():
         return jsonify({"ok": True, "message": "Flask API 運作正常 🚀"})
 
+    # -------------------------------------------------------
+    # Health Check (root)
+    # -------------------------------------------------------
+    @app.route("/")
+    def index():
+        model_dir = os.path.join(BASE_DIR, "projectt", "model_auth_level")
+        model_path = os.path.join(model_dir, "auth_level_lgbm.txt")
+        gemini_key = os.getenv("GEMINI_API_KEY", "")
+        db_ready = os.path.exists(os.path.join(BASE_DIR, "truthlies.db"))
+
+        return jsonify({
+            "api": "TruthLiesDetector",
+            "status": "ok",
+            "model_dir": model_dir,
+            "model_loaded": os.path.exists(model_path),
+            "gemini_key_loaded": bool(gemini_key),
+            "database_ready": db_ready,
+            "description": "Flask 後端運作正常。"
+        })
+
     return app
 
-
-# ============================================================
-# 圖片工具
-# ============================================================
+# =====================================================================
+# Image utilities
+# =====================================================================
 def _load_image_from_url(url: str):
     if cv2 is None:
         return None
@@ -174,17 +222,21 @@ def register_image_route(app):
     return app
 
 
-# ============================================================
-# 主程式入口
-# ============================================================
+# =====================================================================
+# Main Entry
+# =====================================================================
 if __name__ == "__main__":
     app = create_app()
 
     with app.app_context():
         try:
             db.create_all()
-            print("✅ 資料表初始化完成")
+            if init_db:
+                init_db()
+            if cleanup_old_chat_history:
+                cleanup_old_chat_history(30)
+            logging.info("資料庫初始化完成 ✓")
         except Exception as e:
-            print("❌ 資料庫初始化失敗:", e)
+            logging.error(f"資料庫錯誤: {e}")
 
     app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=False)

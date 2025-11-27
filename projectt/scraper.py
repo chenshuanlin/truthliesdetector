@@ -78,29 +78,38 @@ def insert_article_to_db(
         cur = conn.cursor()
         insert_sql = """
             INSERT INTO public.articles
-                (title, content, category, source_link, media_name, created_time, published_time, reliability_score)
+                (title, content, category, source_link, media_name, published_time, reliability_score)
             VALUES
-                (%s, %s, %s, %s, %s, NOW(), %s, %s)
+                (%s, %s, %s, %s, %s, NOW(), %s)
             ON CONFLICT (source_link)
             DO UPDATE SET
                 reliability_score = EXCLUDED.reliability_score,
                 title = EXCLUDED.title,
                 content = EXCLUDED.content,
                 media_name = EXCLUDED.media_name,
-                published_time = EXCLUDED.published_time,
-                created_time = NOW();
+                published_time = NOW();
         """
+
         print(f"📦 DB Insert Score: {reliability_score}")
 
+        # ⚠ 只需要 6 個參數（because published_time 已用 NOW()）
         cur.execute(insert_sql, (
-            title, content, category, source_link, media_name, published_time, reliability_score
+            title,
+            content,
+            category,
+            source_link,
+            media_name,
+            reliability_score
         ))
+
         conn.commit()
         cur.close()
         conn.close()
         print(f"📝 已寫入資料庫：{(title or '')[:30]}... (score={reliability_score})")
+
     except Exception as e:
         print(f"❌ 寫入資料庫失敗：{e}")
+
 
 # ==============================================================================
 # II. 內容擷取與預處理模組 (Extraction & Preprocessing) (略，與上一版相同)

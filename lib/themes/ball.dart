@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:truthliesdetector/themes/app_colors.dart';
-import 'package:truthliesdetector/screens/AIchat.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:screenshot/screenshot.dart';
-import 'dart:typed_data';
+import 'package:flutter_overlay_window/flutter_overlay_window.dart';
+import 'package:flutter/services.dart';
+import 'package:truthliesdetector/themes/app_colors.dart';
+import 'package:truthliesdetector/screens/AIchat.dart';
 
-/// 可拖曳的懸浮球，支援展開子選單
+/// 全域懸浮球元件，可在 App 內外使用。
 class FloatingActionMenu extends StatefulWidget {
   final ScreenshotController? screenshotController;
   final Function(int)? onTap;
@@ -29,9 +33,19 @@ class _FloatingActionMenuState extends State<FloatingActionMenu>
   bool _isOpen = false;
   Offset _offset = Offset.zero;
 
-  final double _fabSize = 56.0; // 主懸浮球大小
-  final double _childFabSize = 45.0; // 子按鈕大小
-  final double _spacing = 60.0; // 子按鈕間距
+  // ✔ API BASE 修正為 10.0.2.2（Android 模擬器 → Flask）
+  final String apiBase = const String.fromEnvironment(
+    'API_BASE',
+    defaultValue: 'http://10.0.2.2:5000',
+  );
+
+  static const MethodChannel _channel = MethodChannel(
+    'com.example.truthliesdetector/screenshot',
+  );
+
+  final double _fabSize = 56.0;
+  final double _childFabSize = 45.0;
+  final double _spacing = 60.0;
   final double _bottomNavBarEstimatedHeight = 80.0;
 
   @override
@@ -45,7 +59,6 @@ class _FloatingActionMenuState extends State<FloatingActionMenu>
       CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
     );
 
-    // 初始化位置（右下角）
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _offset = Offset(
         MediaQuery.of(context).size.width - _fabSize - 16.0,
@@ -64,7 +77,9 @@ class _FloatingActionMenuState extends State<FloatingActionMenu>
     super.dispose();
   }
 
-  /// 切換展開/收合
+  // --------------------------------------------------
+  // 懸浮球開關
+  // --------------------------------------------------
   void _toggleMenu() {
     setState(() {
       _isOpen = !_isOpen;
@@ -76,69 +91,137 @@ class _FloatingActionMenuState extends State<FloatingActionMenu>
     });
   }
 
-  /// 截圖/選擇圖片 → AI 分析
-  Future<void> _recognizeImage() async {
-    _toggleMenu();
-    if (widget.screenshotController != null) {
-      final Uint8List? imageBytes = await widget.screenshotController!
-          .capture();
-      if (imageBytes != null) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => AIchat(
-              initialQuery: '請幫我辨識這張截圖',
-              capturedImageBytes: imageBytes,
-            ),
-          ),
-        );
+  // --------------------------------------------------
+  // 截圖（原生）
+  // --------------------------------------------------
+  Future<Uint8List?> _captureSystemScreenshot() async {
+    if (_isOpen) _toggleMenu();
+
+    try {
+      final String? base64Image = await _channel.invokeMethod('captureScreen');
+      if (base64Image != null && base64Image.isNotEmpty) {
+        return base64Decode(base64Image);
       }
-    } else {
-      FilePickerResult? result = await FilePicker.platform.pickFiles(
-        type: FileType.image,
-      );
-      if (result != null) {
-        String filePath = result.files.single.name;
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => AIchat(initialQuery: '請幫我辨識這張圖片: $filePath'),
-          ),
-        );
-      }
+      return null;
+    } catch (e) {
+      print("Failed to capture screen: $e");
+      return null;
     }
   }
 
-  /// 輸入網址 → AI 分析
+  // --------------------------------------------------
+  // ✔ 修正：呼叫 Flask /analyze/summary
+  // --------------------------------------------------
+  Future<void> _sendToFlask(String query, {Uint8List? imageBytes}) async {
+    try {
+      final uri = Uri.parse('$apiBase/analyze/summary'); // 已修正路徑
+
+      final response = await http.post(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({"text": query}),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        FlutterOverlayWindow.shareData(
+          jsonEncode({
+            'type': 'result',
+            'credibility': data['credibility'],
+            'summary': data['summary'],
+          }),
+        );
+      } else {
+        FlutterOverlayWindow.shareData(
+          jsonEncode({
+            'type': 'error',
+            'message': '伺服器錯誤 ${response.statusCode}',
+          }),
+        );
+      }
+    } catch (e) {
+      FlutterOverlayWindow.shareData(
+        jsonEncode({'type': 'error', 'message': '無法連線後端：$e'}),
+      );
+    }
+  }
+
+  // --------------------------------------------------
+  // 截圖或選圖片 → 查證
+  // --------------------------------------------------
+  Future<void> _recognizeImage() async {
+    _toggleMenu();
+    try {
+      Uint8List? imageBytes;
+
+      if (widget.screenshotController != null) {
+        imageBytes = await widget.screenshotController!.capture();
+      } else {
+        imageBytes = await _captureSystemScreenshot();
+      }
+
+      if (imageBytes != null) {
+        await _sendToFlask("請幫我辨識這張圖片。", imageBytes: imageBytes);
+
+        if (context.mounted) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => AIchat(
+                initialQuery: "請幫我辨識這張圖片。",
+                capturedImageBytes: imageBytes,
+              ),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print("圖片辨識錯誤：$e");
+    }
+  }
+
+  // --------------------------------------------------
+  // 手動輸入網址分析（呼叫 /analyze/summary）
+  // --------------------------------------------------
   void _showUrlInputDialog() {
     _toggleMenu();
-    TextEditingController urlController = TextEditingController();
+    final TextEditingController urlController = TextEditingController();
+
     showDialog(
       context: context,
       builder: (BuildContext dialogContext) {
         return AlertDialog(
-          title: const Text('輸入網址進行搜尋'),
+          title: const Text('輸入網址進行查證'),
           content: TextField(
             controller: urlController,
-            decoration: const InputDecoration(hintText: '請輸入網址'),
+            decoration: const InputDecoration(
+              hintText: '請輸入網址（http 或 https 開頭）',
+            ),
           ),
-          actions: <Widget>[
+          actions: [
             TextButton(
               child: const Text('取消'),
               onPressed: () => Navigator.of(dialogContext).pop(),
             ),
             ElevatedButton(
-              child: const Text('搜尋'),
-              onPressed: () {
-                String url = urlController.text;
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) =>
-                        AIchat(initialQuery: '請幫我辨識這個網址的內容: $url'),
-                  ),
-                );
-                Navigator.of(dialogContext).pop();
+              child: const Text('查證'),
+              onPressed: () async {
+                final url = urlController.text.trim();
+
+                if (url.isNotEmpty) {
+                  Navigator.of(dialogContext).pop();
+
+                  await _sendToFlask("請幫我分析這個網址：$url");
+
+                  if (context.mounted) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => AIchat(initialQuery: "請幫我分析這個網址：$url"),
+                      ),
+                    );
+                  }
+                }
               },
             ),
           ],
@@ -147,16 +230,42 @@ class _FloatingActionMenuState extends State<FloatingActionMenu>
     );
   }
 
-  /// 開啟應用程式主頁面
-  void _openApp() {
+  // --------------------------------------------------
+  // 回到主 App
+  // --------------------------------------------------
+  void _openApp() async {
     _toggleMenu();
-    // 修正導航邏輯，使用 onTap 回呼函式切換到主頁面
     if (widget.onTap != null) {
-      widget.onTap!(0); // 0 是主頁面（HomePage）的索引
+      widget.onTap!(0);
+    } else {
+      if (await FlutterOverlayWindow.isActive()) {
+        await FlutterOverlayWindow.closeOverlay();
+      }
     }
   }
 
-  /// 建立子按鈕
+  // --------------------------------------------------
+  // 在 App 外開啟懸浮球（靜態方法）
+  // --------------------------------------------------
+  static Future<void> showGlobalBall() async {
+    if (!await FlutterOverlayWindow.isPermissionGranted()) {
+      await FlutterOverlayWindow.requestPermission();
+    }
+
+    await FlutterOverlayWindow.showOverlay(
+      height: 120,
+      width: 120,
+      alignment: OverlayAlignment.centerRight,
+      enableDrag: true,
+      overlayTitle: "TruthLiesDetector",
+      overlayContent: "AI懸浮球已啟動",
+      flag: OverlayFlag.defaultFlag,
+    );
+  }
+
+  // --------------------------------------------------
+  // 子按鈕元件
+  // --------------------------------------------------
   Widget _buildSubMenuButton({
     required Widget child,
     required VoidCallback onPressed,
@@ -184,15 +293,84 @@ class _FloatingActionMenuState extends State<FloatingActionMenu>
     );
   }
 
+  // --------------------------------------------------
+  // UI Build
+  // --------------------------------------------------
   @override
   Widget build(BuildContext context) {
     final double halfFabSize = _fabSize / 2;
     final double halfChildFabSize = _childFabSize / 2;
-    final double halfSpacing = _spacing / 2;
 
     return Stack(
       children: [
-        // 主懸浮球
+        // 背景遮罩（菜單打開時）
+        if (_isOpen)
+          Positioned.fill(
+            child: GestureDetector(
+              onTap: _toggleMenu,
+              child: Container(color: Colors.black.withOpacity(0.05)),
+            ),
+          ),
+
+        // 子選單按鈕們
+        if (_isOpen) ...{
+          // 關閉按鈕
+          Positioned(
+            left: _offset.dx - _spacing,
+            top: _offset.dy + halfFabSize - halfChildFabSize + (_spacing * 1.5),
+            child: _buildSubMenuButton(
+              heroTag: 'close_btn',
+              child: const Icon(Icons.close, size: 22),
+              onPressed: () {
+                _toggleMenu();
+                widget.onClose?.call();
+              },
+              backgroundColor: Colors.white,
+              foregroundColor: AppColors.primaryGreen,
+            ),
+          ),
+
+          // 圖片辨識
+          Positioned(
+            left: _offset.dx - _spacing,
+            top: _offset.dy + halfFabSize - halfChildFabSize + (_spacing * 0.5),
+            child: _buildSubMenuButton(
+              heroTag: 'camera_btn',
+              child: const Icon(Icons.camera_alt, size: 22),
+              onPressed: _recognizeImage,
+              backgroundColor: Colors.white,
+              foregroundColor: AppColors.primaryGreen,
+            ),
+          ),
+
+          // 網址分析
+          Positioned(
+            left: _offset.dx - _spacing,
+            top: _offset.dy + halfFabSize - halfChildFabSize - (_spacing * 0.5),
+            child: _buildSubMenuButton(
+              heroTag: 'url_btn',
+              child: const Icon(Icons.search, size: 22),
+              onPressed: _showUrlInputDialog,
+              backgroundColor: Colors.white,
+              foregroundColor: AppColors.primaryGreen,
+            ),
+          ),
+
+          // 回到 app
+          Positioned(
+            left: _offset.dx - _spacing,
+            top: _offset.dy + halfFabSize - halfChildFabSize - (_spacing * 1.5),
+            child: _buildSubMenuButton(
+              heroTag: 'home_btn',
+              child: const Icon(Icons.home, size: 22),
+              onPressed: _openApp,
+              backgroundColor: Colors.white,
+              foregroundColor: AppColors.primaryGreen,
+            ),
+          ),
+        },
+
+        // 主球本體
         Positioned(
           left: _offset.dx,
           top: _offset.dy,
@@ -214,7 +392,7 @@ class _FloatingActionMenuState extends State<FloatingActionMenu>
               });
             },
             child: FloatingActionButton(
-              heroTag: 'mainFloatingButton',
+              heroTag: 'main_btn',
               onPressed: _toggleMenu,
               backgroundColor: AppColors.primaryGreen,
               shape: RoundedRectangleBorder(
@@ -225,67 +403,6 @@ class _FloatingActionMenuState extends State<FloatingActionMenu>
             ),
           ),
         ),
-
-        // 子選單 (垂直排列在左側)
-        if (_isOpen) ...{
-          // 開啟應用程式 (最上方)
-          Positioned(
-            left: _offset.dx - _spacing,
-            top: _offset.dy + halfFabSize - halfChildFabSize - (_spacing * 1.5),
-            child: _buildSubMenuButton(
-              heroTag: 'openAppFloatingButton',
-              child: const Icon(Icons.open_in_new, size: 22),
-              onPressed: _openApp,
-              backgroundColor: Colors.white,
-              foregroundColor: AppColors.primaryGreen,
-            ),
-          ),
-
-          // 輸入網址 (第二個)
-          Positioned(
-            left: _offset.dx - _spacing,
-            top: _offset.dy + halfFabSize - halfChildFabSize - (_spacing * 0.5),
-            child: _buildSubMenuButton(
-              heroTag: 'searchFloatingButton',
-              child: const Icon(Icons.search, size: 22),
-              onPressed: _showUrlInputDialog,
-              backgroundColor: Colors.white,
-              foregroundColor: AppColors.primaryGreen,
-            ),
-          ),
-
-          // 截圖 (第三個)
-          Positioned(
-            left: _offset.dx - _spacing,
-            top: _offset.dy + halfFabSize - halfChildFabSize + (_spacing * 0.5),
-            child: _buildSubMenuButton(
-              heroTag: 'cameraFloatingButton',
-              child: const Icon(Icons.camera_alt, size: 22),
-              onPressed: _recognizeImage,
-              backgroundColor: Colors.white,
-              foregroundColor: AppColors.primaryGreen,
-            ),
-          ),
-
-          // 關閉 (最下方)
-          Positioned(
-            left: _offset.dx - _spacing,
-            top: _offset.dy + halfFabSize - halfChildFabSize + (_spacing * 1.5),
-            child: _buildSubMenuButton(
-              heroTag: 'closeFloatingButton',
-              child: const Icon(Icons.close, size: 22),
-              onPressed: () {
-                _toggleMenu();
-                // 修正：如果父層提供了 onClose 回呼函式，則呼叫它
-                if (widget.onClose != null) {
-                  widget.onClose!();
-                }
-              },
-              backgroundColor: Colors.white,
-              foregroundColor: AppColors.primaryGreen,
-            ),
-          ),
-        },
       ],
     );
   }
