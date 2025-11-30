@@ -10,7 +10,6 @@ from verification_loader import (
 
 bp = Blueprint("stats", __name__)
 
-
 # ============================================================
 # Helper：分類標題
 # ============================================================
@@ -20,7 +19,7 @@ def _categorize_titles(titles):
         '健康': ['確診', '疫苗', '疫情', '醫療', '減肥', '健康'],
         '經濟': ['股', '台積電', '經濟', '投資', '通膨', '銀行'],
         '科技': ['AI', '人工智慧', '科技', '晶片', '蘋果', '微軟'],
-        '社會': ['警方', '警察', '詐騙', '車禍', '火警', '社會'],
+        '社會': ['警方', '警察', '詐騙', '車祍', '火警', '社會'],
         '國際': ['中國', '美國', '日本', '韓國', '俄羅斯', '以色列'],
     }
 
@@ -33,7 +32,6 @@ def _categorize_titles(titles):
                 break
 
     total = sum(counts.values()) or 1
-
     return [
         {"name": k, "percentage": int(v * 100 / total)}
         for k, v in counts.items() if v > 0
@@ -48,32 +46,30 @@ def fake_news_stats():
     print("[DEBUG] /fake-news-stats 被呼叫")
 
     # ============================================
-    # ① 取得初始資料
+    # ① 載入 JSON 查證資料
     # ============================================
     verified_count, unverified_count, verified_items, unverified_items = get_verification_stats()
 
     # ============================================
-    # ② 星期分佈（修正 index 對應方式）
+    # ② 最近 7 天分佈（先以 offset = 0~6）
     # ============================================
     verified_daily = get_daily_distribution(verified_items, 7)
     unverified_daily = get_daily_distribution(unverified_items, 7)
 
-    # 將最近 7 天的資料放到對應的星期欄位 (週一=0 ... 週日=6)，並以星期標籤輸出
-    # 這樣前端畫面上固定的星期標籤（一-日）會與資料對齊，今天的數據會出現在對應的星期位置
-    from datetime import datetime, timedelta
-
+    # ============================================
+    # ③ 依 weekday 重新排列（週一~週日）
+    # ============================================
     today = datetime.now().date()
 
-    # 先把最近 7 天 (offset 0=今天,1=昨天...) 的 verified/unverified 按 weekday 聚合
     verified_by_weekday = {i: 0 for i in range(7)}
     suspicious_by_weekday = {i: 0 for i in range(7)}
+
     for offset in range(0, 7):
         d = today - timedelta(days=offset)
-        wd = d.weekday()  # Monday=0 ... Sunday=6
+        wd = d.weekday()     # 0=Mon..6=Sun
         verified_by_weekday[wd] = verified_daily.get(offset, 0)
         suspicious_by_weekday[wd] = unverified_daily.get(offset, 0)
 
-    # 產出週陣列，順序為 週一..週日，label 使用一..日（與前端靜態標籤對齊）
     labels = ["一", "二", "三", "四", "五", "六", "日"]
     weekly = []
     for wd in range(7):
@@ -84,7 +80,15 @@ def fake_news_stats():
         })
 
     # ============================================
-    # ③ 計算卡片紅灰綠
+    # ⭐ DEBUG：印出 weekly（你要求的）
+    # ============================================
+    print("\n=== DEBUG WEEKLY REPORT ===")
+    for row in weekly:
+        print(row)
+    print("============================\n")
+
+    # ============================================
+    # ④ 卡片紅灰綠
     # ============================================
     total_verified = sum(verified_daily.values())
     total_suspicious = sum(unverified_daily.values())
@@ -93,11 +97,13 @@ def fake_news_stats():
     ai_accuracy = round(total_verified / total * 100) if total else 0
 
     # ============================================
-    # ④ 熱門分類
+    # ⑤ 熱門分類
     # ============================================
     all_titles = [item.get("title", "") for item in (verified_items + unverified_items)]
 
-    # meta.fetchedAt: 取所有 items 中最新的 crawled_at（若有），以 ISO 字串回傳
+    # ============================================
+    # ⑥ meta.fetchedAt：取所有 crawled_at 最大值（如有）
+    # ============================================
     latest_ts = None
     for item in (verified_items + unverified_items):
         ts = item.get('crawled_at')
@@ -109,10 +115,14 @@ def fake_news_stats():
             continue
         if latest_ts is None or dt > latest_ts:
             latest_ts = dt
+
     meta = {"source": "JSON raw_*.json", "count": len(all_titles)}
     if latest_ts:
-        meta['fetchedAt'] = latest_ts.isoformat()
+        meta["fetchedAt"] = latest_ts.isoformat()
 
+    # ============================================
+    # ⑦ 回傳 JSON
+    # ============================================
     return jsonify({
         "ok": True,
         "stats": {

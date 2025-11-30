@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from models import db, User
 
-bp = Blueprint('settings', __name__)
+bp = Blueprint('settings_bp', __name__)
 
 # 取得使用者設定
 @bp.route('/settings/<int:user_id>', methods=['GET'])

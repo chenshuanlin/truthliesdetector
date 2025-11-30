@@ -19,8 +19,24 @@ class ProfilePage extends StatefulWidget {
 
 class _ProfilePageState extends State<ProfilePage> {
   final tags = [
-    '科技', '政治', '健康', '教育', '娛樂', '體育', '設計', '旅遊', '生活', '商業',
-    '金融', '環境', '國際', '藝術', '社會', '研究', '美食', '影視'
+    '科技',
+    '政治',
+    '健康',
+    '教育',
+    '娛樂',
+    '體育',
+    '設計',
+    '旅遊',
+    '生活',
+    '商業',
+    '金融',
+    '環境',
+    '國際',
+    '藝術',
+    '社會',
+    '研究',
+    '美食',
+    '影視',
   ];
   final selected = <String>{'科技', '健康', '社會'};
 
@@ -40,7 +56,7 @@ class _ProfilePageState extends State<ProfilePage> {
   void _editProfile() {
     final userProvider = Provider.of<UserProvider>(context, listen: false);
     final user = userProvider.currentUser;
-    
+
     if (user == null) return;
 
     _nameController.text = user.username;
@@ -95,16 +111,17 @@ class _ProfilePageState extends State<ProfilePage> {
                 showDialog(
                   context: context,
                   barrierDismissible: false,
-                  builder: (context) => const Center(
-                    child: CircularProgressIndicator(),
-                  ),
+                  builder: (context) =>
+                      const Center(child: CircularProgressIndicator()),
                 );
 
                 try {
                   final success = await userProvider.updateUserProfile(
                     _nameController.text,
                     _emailController.text,
-                    _phoneController.text.isEmpty ? null : _phoneController.text,
+                    _phoneController.text.isEmpty
+                        ? null
+                        : _phoneController.text,
                   );
 
                   // 關閉載入指示器
@@ -134,7 +151,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 } catch (e) {
                   // 關閉載入指示器
                   if (mounted) Navigator.pop(context);
-                  
+
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
@@ -162,7 +179,7 @@ class _ProfilePageState extends State<ProfilePage> {
     return Consumer<UserProvider>(
       builder: (context, userProvider, child) {
         final user = userProvider.currentUser;
-        
+
         // 如果沒有登入，顯示登入提示
         if (!userProvider.isLoggedIn || user == null) {
           return const Center(
@@ -171,7 +188,10 @@ class _ProfilePageState extends State<ProfilePage> {
               children: [
                 Icon(Icons.person_off, size: 64, color: Colors.grey),
                 SizedBox(height: 16),
-                Text('請先登入', style: TextStyle(fontSize: 18, color: Colors.grey)),
+                Text(
+                  '請先登入',
+                  style: TextStyle(fontSize: 18, color: Colors.grey),
+                ),
               ],
             ),
           );
@@ -194,14 +214,12 @@ class _ProfilePageState extends State<ProfilePage> {
                 ),
                 SafeArea(
                   child: Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
                     child: Row(
                       children: [
-                        IconButton(
-                          icon: const Icon(Icons.arrow_back, color: Colors.white),
-                          onPressed: () => Navigator.pop(context),
-                        ),
                         const Spacer(),
                         Image.asset(
                           'lib/assets/logo.png',
@@ -222,7 +240,9 @@ class _ProfilePageState extends State<ProfilePage> {
                         radius: 28,
                         backgroundColor: Colors.white,
                         child: Text(
-                          user.username.isNotEmpty ? user.username[0].toUpperCase() : 'U',
+                          user.username.isNotEmpty
+                              ? user.username[0].toUpperCase()
+                              : 'U',
                           style: const TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
@@ -235,25 +255,38 @@ class _ProfilePageState extends State<ProfilePage> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(user.username,
-                                style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w700)),
+                            Text(
+                              user.username,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
                             const SizedBox(height: 4),
-                            Text(user.email,
-                                style: const TextStyle(color: Colors.white70)),
-                            if (user.phone != null && user.phone!.isNotEmpty) ...[
+                            Text(
+                              user.email,
+                              style: const TextStyle(color: Colors.white70),
+                            ),
+                            if (user.phone != null &&
+                                user.phone!.isNotEmpty) ...[
                               const SizedBox(height: 2),
-                              Text(user.phone!,
-                                  style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                              Text(
+                                user.phone!,
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 12,
+                                ),
+                              ),
                             ],
                           ],
                         ),
                       ),
                       TextButton(
                         onPressed: _editProfile, // 🔹 打開編輯對話框
-                        style: TextButton.styleFrom(foregroundColor: Colors.white),
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.white,
+                        ),
                         child: const Text('編輯資料'),
                       ),
                     ],
@@ -274,8 +307,10 @@ class _ProfilePageState extends State<ProfilePage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('帳號資訊',
-                              style: Theme.of(context).textTheme.titleMedium),
+                          Text(
+                            '帳號資訊',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
                           const SizedBox(height: 12),
                           _InfoRow(label: '帳號', value: user.account),
                           _InfoRow(label: '用戶名稱', value: user.username),
@@ -286,7 +321,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       ),
                     ),
                   ),
-                  
+
                   const SizedBox(height: 16),
 
                   // 興趣標籤
@@ -296,8 +331,10 @@ class _ProfilePageState extends State<ProfilePage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('興趣標籤',
-                              style: Theme.of(context).textTheme.titleMedium),
+                          Text(
+                            '興趣標籤',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
                           const SizedBox(height: 8),
                           Wrap(
                             spacing: 8,
@@ -326,7 +363,9 @@ class _ProfilePageState extends State<ProfilePage> {
                                     height: 1.2,
                                   ),
                                   labelPadding: const EdgeInsets.symmetric(
-                                      horizontal: 12, vertical: 2),
+                                    horizontal: 12,
+                                    vertical: 2,
+                                  ),
                                   selected: selected.contains(t),
                                   showCheckmark: false, // ❌ 關掉預設黑勾
                                   selectedColor: _sageDeep,
@@ -352,17 +391,20 @@ class _ProfilePageState extends State<ProfilePage> {
                   _NavTile(
                     title: '收藏文章',
                     subtitle: '管理你收藏的新聞與文章',
-                    onTap: () => Navigator.pushNamed(context, CollectPage.route),
+                    onTap: () =>
+                        Navigator.pushNamed(context, CollectPage.route),
                   ),
                   _NavTile(
                     title: '瀏覽歷史',
                     subtitle: '查看你的瀏覽記錄',
-                    onTap: () => Navigator.pushNamed(context, HistoryPage.route),
+                    onTap: () =>
+                        Navigator.pushNamed(context, HistoryPage.route),
                   ),
                   _NavTile(
                     title: '通知設定',
                     subtitle: '管理訂閱與提醒設定',
-                    onTap: () => Navigator.pushNamed(context, SettingsPage.route),
+                    onTap: () =>
+                        Navigator.pushNamed(context, SettingsPage.route),
                   ),
 
                   const SizedBox(height: 8),
@@ -402,7 +444,10 @@ class _ProfilePageState extends State<ProfilePage> {
                       if (shouldLogout == true) {
                         await userProvider.logout();
                         if (mounted) {
-                          Navigator.pushReplacementNamed(context, SplashPage.route);
+                          Navigator.pushReplacementNamed(
+                            context,
+                            SplashPage.route,
+                          );
                         }
                       }
                     },
@@ -422,10 +467,7 @@ class _InfoRow extends StatelessWidget {
   final String label;
   final String value;
 
-  const _InfoRow({
-    required this.label,
-    required this.value,
-  });
+  const _InfoRow({required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {

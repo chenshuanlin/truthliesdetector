@@ -287,12 +287,10 @@ class _AiReportPageState extends State<AiReportPage> {
         centerTitle: true,
         backgroundColor: AppColors.backgroundLight,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: AppColors.darkText),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        actions: [],
+        // ←←← 原本的 leading 被移除
+        automaticallyImplyLeading: false, // 🔥 確保左上角不會自動出現返回鍵
       ),
+
       body: _isLoading
           ? const Center(
               child: Column(
