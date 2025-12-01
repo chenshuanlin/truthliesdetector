@@ -66,9 +66,8 @@ class _AIaccState extends State<AIacc> {
           _historyQueries = records.map((r) {
             return {
               "id": r["id"],
-              "title": r["query_text"] ?? "",
+              "query_text": r["query_text"], // ⭐ 改這裡！
               "created_at": r["created_at"],
-              "gemini_result": r["gemini_result"] ?? {},
               "conversation": r["conversation"] ?? [],
             };
           }).toList();
@@ -166,8 +165,92 @@ class _AIaccState extends State<AIacc> {
   }
 
   // ============================================================
-  // UI Widgets
+  // 歷史查詢 UI
   // ============================================================
+  Widget _historySection() {
+    if (_isLoadingHistory) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_historyQueries.isEmpty) {
+      return const Center(child: Text("尚無查證紀錄"));
+    }
+
+    final list = _expandedHistory ? _historyQueries : _historyQueries.take(3);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          "歷史查詢",
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 15),
+        ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: list.length,
+          itemBuilder: (_, index) {
+            final q = list.elementAt(index);
+
+            return InkWell(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => AIchat(
+                      sessionId: q["id"],
+                      initialQuery: "",
+                      existingConversation: q["conversation"],
+                      createdAt: q["created_at"],
+                      title: q["query_text"], // ⭐ 這裡也要改！
+                    ),
+                  ),
+                );
+              },
+              child: Card(
+                elevation: 2,
+                margin: const EdgeInsets.only(bottom: 15),
+                child: Padding(
+                  padding: const EdgeInsets.all(15),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        q["query_text"], // ⭐ 顯示查證內容
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        q["created_at"],
+                        style: const TextStyle(
+                          color: Colors.grey,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+        if (_historyQueries.length > 3)
+          TextButton(
+            onPressed: () => setState(() {
+              _expandedHistory = !_expandedHistory;
+            }),
+            child: Text(_expandedHistory ? "顯示較少" : "顯示全部"),
+          ),
+      ],
+    );
+  }
+
+  // ===== 其他 UI（略，從你原本貼的保留） =====
+
   Widget _topBanner() {
     return Container(
       height: 200,
@@ -274,88 +357,6 @@ class _AIaccState extends State<AIacc> {
         ),
         child: const Text("立即查證", style: TextStyle(fontSize: 18)),
       ),
-    );
-  }
-
-  Widget _historySection() {
-    if (_isLoadingHistory) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (_historyQueries.isEmpty) {
-      return const Center(child: Text("尚無查證紀錄"));
-    }
-
-    final list = _expandedHistory ? _historyQueries : _historyQueries.take(3);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          "歷史查詢",
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 15),
-        ListView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: list.length,
-          itemBuilder: (_, index) {
-            final q = list.elementAt(index);
-
-            return InkWell(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => AIchat(
-                      sessionId: q["id"], // ⭐ 回到舊 session
-                      initialQuery: "", // 不需要
-                      existingConversation: q["conversation"],
-                      createdAt: q["created_at"],
-                      title: q["title"],
-                    ),
-                  ),
-                );
-              },
-              child: Card(
-                elevation: 2,
-                margin: const EdgeInsets.only(bottom: 15),
-                child: Padding(
-                  padding: const EdgeInsets.all(15),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        q["title"],
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        q["created_at"],
-                        style: const TextStyle(
-                          color: Colors.grey,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          },
-        ),
-        if (_historyQueries.length > 3)
-          TextButton(
-            onPressed: () => setState(() {
-              _expandedHistory = !_expandedHistory;
-            }),
-            child: Text(_expandedHistory ? "顯示較少" : "顯示全部"),
-          ),
-      ],
     );
   }
 }

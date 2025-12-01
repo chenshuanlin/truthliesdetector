@@ -5,6 +5,7 @@ import logging
 import base64
 import numpy as np
 import requests
+
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
@@ -34,8 +35,9 @@ except Exception:
     cv2 = None
     logging.warning("⚠️ OpenCV 未載入")
 
+
 # ============================================================
-# Import Blueprints (main API)
+# Import Blueprints
 # ============================================================
 from routes_auth import bp as auth_bp
 from routes_stats import bp as stats_bp
@@ -46,14 +48,11 @@ from routes_articles import bp as articles_bp
 from routes_comments import bp as comments_bp
 from routes_reports import bp as reports_bp
 
-# ============================================================
-# Chat API — ⭐新版（必須使用 routes_chat）
-# ============================================================
+# ⭐ Chat Blueprint（你要求 A = chat_bp）
 from routes_chat import chat_bp
 
-# ============================================================
-# Optional: Extra API
-# ============================================================
+
+# Optional routes
 try:
     from routes.history_routes import bp as history_bp
     from routes.analyze_routes import analyze_bp
@@ -63,17 +62,18 @@ except Exception as e:
     analyze_bp = None
 
 # ============================================================
-# Database Core
+# Database
 # ============================================================
 try:
-    from core.database import init_db, get_chat_history, cleanup_old_chat_history
-except Exception:
+    from core.database import init_db, cleanup_old_chat_history
+except Exception as e:
+    logging.error(f"❌ database import error: {e}")
     init_db = None
-    get_chat_history = None
     cleanup_old_chat_history = None
 
 from config import Config
 from models import db
+
 
 # =====================================================================
 # Create Flask App
@@ -82,13 +82,12 @@ def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
 
+    # DEBUG on
     app.config["SQLALCHEMY_ECHO"] = True
     app.config["DEBUG"] = True
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s]: %(message)s"
-    )
+    logging.basicConfig(level=logging.INFO,
+                        format="%(asctime)s [%(levelname)s]: %(message)s")
 
     print("📡 使用資料庫:", app.config["SQLALCHEMY_DATABASE_URI"])
 
@@ -98,7 +97,7 @@ def create_app():
     db.init_app(app)
 
     # -------------------------------------------------------
-    # 註冊主 API 到 /api
+    # 掛載主 API
     # -------------------------------------------------------
     app.register_blueprint(auth_bp, url_prefix="/api")
     app.register_blueprint(stats_bp, url_prefix="/api")
@@ -110,12 +109,12 @@ def create_app():
     app.register_blueprint(reports_bp, url_prefix="/api")
 
     # -------------------------------------------------------
-    # ⭐ Chat API — 正確掛載：/api/chat
+    # ⭐ 你要求保留的 Chat API：/api/chat_xxxxx
     # -------------------------------------------------------
     app.register_blueprint(chat_bp, url_prefix="/api")
 
     # -------------------------------------------------------
-    # ⭐ 其他補充 API
+    # 其他 API（可選）
     # -------------------------------------------------------
     if analyze_bp:
         app.register_blueprint(analyze_bp, url_prefix="/api")
@@ -127,36 +126,32 @@ def create_app():
     register_image_route(app)
 
     # -------------------------------------------------------
-    # Ping
+    # 小測試 ping
     # -------------------------------------------------------
     @app.route("/api/ping")
     def ping():
         return jsonify({"ok": True, "message": "Flask API 運作正常 🚀"})
 
-    # -------------------------------------------------------
-    # Health Check (root)
-    # -------------------------------------------------------
+    # 根目錄健康檢查
     @app.route("/")
     def index():
+        gemini_key = os.getenv("GEMINI_API_KEY", "")
         model_dir = os.path.join(BASE_DIR, "projectt", "model_auth_level")
         model_path = os.path.join(model_dir, "auth_level_lgbm.txt")
-        gemini_key = os.getenv("GEMINI_API_KEY", "")
-        db_ready = os.path.exists(os.path.join(BASE_DIR, "truthlies.db"))
 
         return jsonify({
             "api": "TruthLiesDetector",
             "status": "ok",
-            "model_dir": model_dir,
             "model_loaded": os.path.exists(model_path),
             "gemini_key_loaded": bool(gemini_key),
-            "database_ready": db_ready,
-            "description": "Flask 後端運作正常。"
+            "database_ready": True,
         })
 
     return app
 
+
 # =====================================================================
-# Image utilities
+# Image Utilities
 # =====================================================================
 def _load_image_from_url(url: str):
     if cv2 is None:
@@ -184,10 +179,11 @@ def _load_image_from_base64(b64: str):
 def _analyze_image(img):
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     variance_laplacian = float(cv2.Laplacian(gray, cv2.CV_64F).var())
-    hist = cv2.calcHist([gray], [0], None, [256], [0, 256]).flatten()
 
+    hist = cv2.calcHist([gray], [0], None, [256], [0, 256]).flatten()
     hist_norm = hist / (hist.sum() + 1e-6)
     entropy = float(-(hist_norm * np.log(hist_norm + 1e-9)).sum())
+
     edges = cv2.Canny(gray, 100, 200)
     edge_ratio = float(edges.mean())
 

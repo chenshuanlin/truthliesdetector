@@ -36,7 +36,7 @@ void main() {
   );
 }
 
-/// 🌍 系統懸浮球入口 — 額外 entry point（Android）
+/// 🌍 系統懸浮球入口
 @pragma('vm:entry-point')
 void overlayMain() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -52,7 +52,7 @@ void overlayMain() {
 }
 
 // =========================================================
-// App 主體
+// App
 // =========================================================
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -62,8 +62,6 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Truths and Lies Detector',
       debugShowCheckedModeBanner: false,
-
-      // ★ 使用 Route Observer（紀錄頁面切換）
       navigatorObservers: [routeObserver],
 
       theme: ThemeData(
@@ -88,14 +86,10 @@ class MyApp extends StatelessWidget {
         AiReportPage.route: (_) => const AiReportPage(),
         SettingsPage.route: (_) => const SettingsPage(),
 
-        // AIacc 不能 const（但 constructor 本身可 const）
         AIacc.route: (_) => const AIacc(),
-
-        // AIchat 必須提供 initialQuery
         AIchat.route: (_) => const AIchat(initialQuery: ""),
       },
 
-      // ★ onGenerateRoute for dynamic pages
       onGenerateRoute: (settings) {
         if (settings.name == "/chat_detail") {
           return MaterialPageRoute(builder: (_) => const Placeholder());
@@ -107,7 +101,7 @@ class MyApp extends StatelessWidget {
 }
 
 // =========================================================
-// 主畫面（底部導航 + 懸浮球）
+// 主畫面
 // =========================================================
 class MainLayout extends StatefulWidget {
   static const String route = '/main_layout';
@@ -123,32 +117,39 @@ class _MainLayoutState extends State<MainLayout> {
 
   final ScreenshotController _screenshotController = ScreenshotController();
 
-  // 新版 B 底部導覽頁面
+  // 🔥 避免 overlayListener 重複 listen (修正你的 bug)
+  static bool _overlaySubscribed = false;
+
   late final List<Widget> _pages = [
-    const HomePage(), // 0 首頁
-    const AiReportPage(), // 1 發現（AI 報告）
-    const AIacc(), // 2 AI 查證（中間圓形按鈕）
-    const SearchPage(), // 3 新聞搜尋
-    const ProfilePage(), // 4 我的
+    const HomePage(),
+    const AiReportPage(),
+    const AIacc(),
+    const SearchPage(),
+    const ProfilePage(),
   ];
 
   @override
   void initState() {
     super.initState();
 
-    // 監聽 Android 懸浮球事件
-    FlutterOverlayWindow.overlayListener.listen((event) {
-      if (event["action"] == "open_page") {
-        switch (event["page"]) {
-          case "AIacc":
-            if (_currentIndex != 2) setState(() => _currentIndex = 2);
-            break;
-          case "SearchPage":
-            if (_currentIndex != 3) setState(() => _currentIndex = 3);
-            break;
+    // ========================================================
+    // 修正版：避免 Stream Listen 多次
+    // ========================================================
+    if (!_overlaySubscribed) {
+      _overlaySubscribed = true;
+      FlutterOverlayWindow.overlayListener.listen((event) {
+        if (event["action"] == "open_page") {
+          switch (event["page"]) {
+            case "AIacc":
+              if (_currentIndex != 2) setState(() => _currentIndex = 2);
+              break;
+            case "SearchPage":
+              if (_currentIndex != 3) setState(() => _currentIndex = 3);
+              break;
+          }
         }
-      }
-    });
+      });
+    }
   }
 
   void _onItemTapped(int index) {
@@ -156,7 +157,7 @@ class _MainLayoutState extends State<MainLayout> {
   }
 
   // ======================
-  // 啟動 Android 懸浮球
+  // 啟動懸浮球
   // ======================
   Future<void> _startGlobalFloatingBall() async {
     if (kIsWeb) return;
@@ -193,9 +194,6 @@ class _MainLayoutState extends State<MainLayout> {
     }
   }
 
-  // ======================
-  // 關閉懸浮球
-  // ======================
   Future<void> _stopGlobalFloatingBall() async {
     if (kIsWeb) return;
 
@@ -240,13 +238,11 @@ class _MainLayoutState extends State<MainLayout> {
           children: [
             IndexedStack(index: _currentIndex, children: _pages),
 
-            // 自訂 Bottom Navigation
             CustomBottomNavBar(
               currentIndex: _currentIndex,
               onTap: _onItemTapped,
             ),
 
-            // App 內懸浮球（可恢復）
             if (_showFab)
               FloatingActionMenu(
                 screenshotController: _screenshotController,
@@ -272,7 +268,7 @@ class _MainLayoutState extends State<MainLayout> {
 }
 
 // =========================================================
-// 自訂底部導航列（新版 B 版）
+// 自訂底部導航列
 // =========================================================
 class CustomBottomNavBar extends StatelessWidget {
   final int currentIndex;
@@ -311,19 +307,17 @@ class CustomBottomNavBar extends StatelessWidget {
         child: Stack(
           clipBehavior: Clip.none,
           children: [
-            // 底部的選項列（首頁、發現、搜尋、我的）
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 _navItem(Icons.home, "首頁", 0),
                 _navItem(Icons.access_time, "發現", 1),
-                const SizedBox(width: 60), // 中間圓形按鈕的空位
+                const SizedBox(width: 60),
                 _navItem(Icons.search, "新聞搜尋", 3),
                 _navItem(Icons.person, "我的", 4),
               ],
             ),
 
-            // 中間圓形按鈕（AIacc）
             Positioned(
               top: -28,
               left: MediaQuery.of(context).size.width / 2 - 45,
@@ -353,7 +347,6 @@ class CustomBottomNavBar extends StatelessWidget {
     );
   }
 
-  // 底部導覽 item
   Widget _navItem(IconData icon, String label, int index) {
     final bool isSelected = currentIndex == index;
 
@@ -377,11 +370,3 @@ class CustomBottomNavBar extends StatelessWidget {
     );
   }
 }
-// =========================================================
-// main.dart 結尾（如果有需要補充，可在此加入 Helper 或全域 function）
-// =========================================================
-
-// 目前 FloatingActionMenu 定義在 themes/ball.dart
-// main.dart 不需重複定義，直接使用即可。
-
-// 🎉 main.dart 完成！
