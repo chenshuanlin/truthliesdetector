@@ -15,11 +15,18 @@ from dotenv import load_dotenv
 # ============================================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ENV_PATH = os.path.join(BASE_DIR, ".env")
-load_dotenv(ENV_PATH)
+
+print(f"🔍 ENV PATH = {ENV_PATH}")
+
+if os.path.exists(ENV_PATH):
+    load_dotenv(ENV_PATH)
+    print("✅ .env 載入成功")
+else:
+    print("❌ 找不到 .env，請確認它與 app.py 在同一資料夾")
 
 warnings.filterwarnings("ignore", category=UserWarning, module="jieba")
 
-# Extend paths for imports
+# Extend import paths
 sys.path.extend([
     BASE_DIR,
     os.path.join(BASE_DIR, "core"),
@@ -48,28 +55,22 @@ from routes_articles import bp as articles_bp
 from routes_comments import bp as comments_bp
 from routes_reports import bp as reports_bp
 
-# ⭐ Chat Blueprint（你要求 A = chat_bp）
+# ⭐ Chat Blueprint
 from routes_chat import chat_bp
 
 
-# Optional routes
-try:
-    from routes.history_routes import bp as history_bp
-    from routes.analyze_routes import analyze_bp
-except Exception as e:
-    logging.error(f"[routes] ❌ 第二套路由載入失敗：{e}")
-    history_bp = None
-    analyze_bp = None
+# 避免 import 錯誤的第二套路由
+history_bp = None
+analyze_bp = None
 
 # ============================================================
 # Database
 # ============================================================
 try:
-    from core.database import init_db, cleanup_old_chat_history
+    from core.database import init_db   # 只保留存在的功能
 except Exception as e:
     logging.error(f"❌ database import error: {e}")
     init_db = None
-    cleanup_old_chat_history = None
 
 from config import Config
 from models import db
@@ -82,14 +83,17 @@ def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
 
-    # DEBUG on
+    # Debug SQL
     app.config["SQLALCHEMY_ECHO"] = True
     app.config["DEBUG"] = True
 
-    logging.basicConfig(level=logging.INFO,
-                        format="%(asctime)s [%(levelname)s]: %(message)s")
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s]: %(message)s"
+    )
 
     print("📡 使用資料庫:", app.config["SQLALCHEMY_DATABASE_URI"])
+    print("🔑 Gemini Key Loaded?", bool(os.getenv("GEMINI_API_KEY", "")))
 
     # CORS
     CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
@@ -97,7 +101,7 @@ def create_app():
     db.init_app(app)
 
     # -------------------------------------------------------
-    # 掛載主 API
+    # 主 API
     # -------------------------------------------------------
     app.register_blueprint(auth_bp, url_prefix="/api")
     app.register_blueprint(stats_bp, url_prefix="/api")
@@ -108,17 +112,12 @@ def create_app():
     app.register_blueprint(comments_bp, url_prefix="/api")
     app.register_blueprint(reports_bp, url_prefix="/api")
 
-    # -------------------------------------------------------
-    # ⭐ 你要求保留的 Chat API：/api/chat_xxxxx
-    # -------------------------------------------------------
+    # ⭐ Chat routes
     app.register_blueprint(chat_bp, url_prefix="/api")
 
-    # -------------------------------------------------------
-    # 其他 API（可選）
-    # -------------------------------------------------------
+    # Optional routes（避免 import 錯）
     if analyze_bp:
         app.register_blueprint(analyze_bp, url_prefix="/api")
-
     if history_bp:
         app.register_blueprint(history_bp, url_prefix="/api")
 
@@ -126,7 +125,7 @@ def create_app():
     register_image_route(app)
 
     # -------------------------------------------------------
-    # 小測試 ping
+    # /api/ping
     # -------------------------------------------------------
     @app.route("/api/ping")
     def ping():
@@ -136,13 +135,9 @@ def create_app():
     @app.route("/")
     def index():
         gemini_key = os.getenv("GEMINI_API_KEY", "")
-        model_dir = os.path.join(BASE_DIR, "projectt", "model_auth_level")
-        model_path = os.path.join(model_dir, "auth_level_lgbm.txt")
-
         return jsonify({
             "api": "TruthLiesDetector",
             "status": "ok",
-            "model_loaded": os.path.exists(model_path),
             "gemini_key_loaded": bool(gemini_key),
             "database_ready": True,
         })
@@ -229,8 +224,6 @@ if __name__ == "__main__":
             db.create_all()
             if init_db:
                 init_db()
-            if cleanup_old_chat_history:
-                cleanup_old_chat_history(30)
             logging.info("資料庫初始化完成 ✓")
         except Exception as e:
             logging.error(f"資料庫錯誤: {e}")

@@ -49,7 +49,4 @@ def create_report():
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({
-            "ok": False,
-            "error": str(e)
-        }), 500
+        return jsonify({"ok": False, "error": str(e)}), 500

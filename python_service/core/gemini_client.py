@@ -1,108 +1,109 @@
 # =====================================================================
-# gemini_client.py - Gemini 文字 / 長對話 / 圖片 / 圖文分析封裝
+# gemini_client.py  —— 方案 B：自動降級模型 + 安全錯誤處理
 # =====================================================================
 
 import os
 import logging
-import mimetypes
-import re
+import google.generativeai as genai
+from google.api_core.exceptions import ResourceExhausted
 
-try:
-    import google.generativeai as genai
-except Exception:
-    genai = None
-
-# ============================================================
-# 初始化 Gemini 模型
-# ============================================================
+# ---------------------------------------------------------
+# 讀取 API KEY
+# ---------------------------------------------------------
 API_KEY = os.getenv("GEMINI_API_KEY", "")
+
 if not API_KEY:
-    logging.warning("⚠️ 未設定 GEMINI_API_KEY")
+    logging.warning("⚠️ GEMINI_API_KEY 未設定，Gemini 功能將無法使用。")
 else:
-    if genai:
+    genai.configure(api_key=API_KEY)
+
+# ---------------------------------------------------------
+# 可用模型（依優先順序）
+# ---------------------------------------------------------
+MODEL_CANDIDATES = [
+    "models/gemini-2.0-flash",
+    "models/gemini-1.5-flash",
+    "models/gemini-1.0-pro",
+]
+
+
+def load_models():
+    """依序嘗試載入所有模型，能用的就加入列表"""
+    models = []
+    for name in MODEL_CANDIDATES:
         try:
-            genai.configure(api_key=API_KEY)
+            m = genai.GenerativeModel(name)
+            models.append(m)
+            logging.info(f"✅ 模型可用：{name}")
         except Exception as e:
-            logging.warning(f"⚠️ 無法設定 genai API key: {e}")
-
-def _load_model(model_name: str):
-    try:
-        if genai is None:
-            return None
-        return genai.GenerativeModel(model_name)
-    except Exception as e:
-        logging.warning(f"⚠️ 模型 {model_name} 載入失敗：{e}")
-        return None
-
-gemini_model = None
-if genai:
-    gemini_model = (
-        _load_model("models/gemini-2.0-flash")
-        or _load_model("models/gemini-1.5-flash")
-        or _load_model("models/gemini-1.0-pro")
-    )
-
-if gemini_model:
-    logging.info("✅ Gemini 模型載入完成")
+            logging.warning(f"⚠️ 模型不可用：{name} → {e}")
+    return models
 
 
-# ============================================================
-# 基本回答
-# ============================================================
+# 可用模型清單（至少一個）
+AVAILABLE_MODELS = load_models()
+
+if not AVAILABLE_MODELS:
+    logging.error("❌ 沒有任何 Gemini 模型可用。")
+
+
+# ---------------------------------------------------------
+# 單次訊息（簡單模式）
+# ---------------------------------------------------------
 def ask_gemini(prompt: str) -> str:
-    if not gemini_model:
-        return "⚠️ Gemini 模型尚未載入成功。"
+    if not AVAILABLE_MODELS:
+        return "⚠️ Gemini 模型不可用"
 
-    try:
-        resp = gemini_model.generate_content(prompt)
-        text = getattr(resp, "text", "").strip()
-        return text or "⚠️ 無法取得回覆。"
-    except Exception as e:
-        logging.error(f"Gemini 回覆錯誤：{e}", exc_info=True)
-        return "⚠️ 回覆失敗，請稍後再試。"
+    for model in AVAILABLE_MODELS:
+        try:
+            resp = model.generate_content(prompt)
+            return getattr(resp, "text", "").strip() or "⚠️ 無法取得回覆"
+        except ResourceExhausted:
+            logging.error(f"❌ 模型無額度，嘗試下一個模型：{model.model_name}")
+            continue
+        except Exception as e:
+            logging.error(f"❌ Gemini 錯誤：{e}")
+
+    return "⚠️ 查證時發生錯誤（額度可能不足），請稍後再試。"
 
 
-# ============================================================
-# 💬 AIchat — 長對話模式
-# ============================================================
+# ---------------------------------------------------------
+# Chat 模式（多輪對話）
+# ---------------------------------------------------------
 def ask_gemini_chat(message: str, history: list) -> str:
-    """
-    history 格式（routes_chat 提供）:
-    [
-        { "role": "user/model", "parts": [{"text": "..."}] },
-        ...
-    ]
-    """
-    if not gemini_model:
-        return "⚠️ Gemini 模型尚未載入成功。"
+    if not AVAILABLE_MODELS:
+        return "⚠️ Gemini 模型不可用"
 
-    try:
-        msgs = []
-
-        # ⭐ 讀取 history（從 parts 中取 text）
-        for h in history:
-            try:
-                part_text = h["parts"][0]["text"]
-            except Exception:
-                logging.warning(f"⚠️ history 格式錯誤，跳過：{h}")
-                continue
-
+    # 組合 Gemini Chat 格式
+    msgs = []
+    for h in history:
+        try:
             msgs.append({
                 "role": h["role"],
-                "parts": [{"text": part_text}]
+                "parts": [{"text": h["parts"][0]["text"]}]
             })
+        except:
+            continue
 
-        # ⭐ 加入新訊息
-        msgs.append({
-            "role": "user",
-            "parts": [{"text": message}]
-        })
+    msgs.append({"role": "user", "parts": [{"text": message}]})
 
-        response = gemini_model.generate_content(msgs)
-        reply = getattr(response, "text", "").strip()
+    # -----------------------------------------------------
+    # 依序嘗試所有模型，直到成功
+    # -----------------------------------------------------
+    for model in AVAILABLE_MODELS:
+        try:
+            resp = model.generate_content(msgs)
+            reply = getattr(resp, "text", "").strip()
+            return reply or "⚠️ 暫時無法取得回覆"
 
-        return reply or "⚠️ 無回覆，請稍後再試。"
+        except ResourceExhausted:
+            logging.error(f"❌ 模型額度不足：{model.model_name} → 換下一個")
+            continue
 
-    except Exception as e:
-        logging.error(f"Gemini Chat 錯誤：{e}", exc_info=True)
-        return "⚠️ 聊天失敗，請稍後再試。"
+        except Exception as e:
+            logging.error(f"Gemini Chat 錯誤：{e}", exc_info=True)
+
+    # -----------------------------------------------------
+    # 全部模型都失敗 → 回傳友善錯誤
+    # -----------------------------------------------------
+    return "⚠️ 查證功能目前額度不足，請稍後再試。"

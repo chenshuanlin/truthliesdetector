@@ -76,35 +76,31 @@ def insert_article_to_db(
     try:
         conn = psycopg2.connect(**DB_CONFIG)
         cur = conn.cursor()
+        
         insert_sql = """
             INSERT INTO public.articles
                 (title, content, category, source_link, media_name, published_time, reliability_score)
             VALUES
-                (%s, %s, %s, %s, %s, NOW(), %s)
+                (%s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (source_link)
             DO UPDATE SET
                 reliability_score = EXCLUDED.reliability_score,
                 title = EXCLUDED.title,
                 content = EXCLUDED.content,
                 media_name = EXCLUDED.media_name,
-                published_time = NOW();
+                published_time = EXCLUDED.published_time;
         """
 
         print(f"📦 DB Insert Score: {reliability_score}")
 
-        # ⚠ 只需要 6 個參數（because published_time 已用 NOW()）
         cur.execute(insert_sql, (
-            title,
-            content,
-            category,
-            source_link,
-            media_name,
-            reliability_score
+            title, content, category, source_link, media_name, published_time, reliability_score
         ))
-
+        
         conn.commit()
         cur.close()
         conn.close()
+
         print(f"📝 已寫入資料庫：{(title or '')[:30]}... (score={reliability_score})")
 
     except Exception as e:

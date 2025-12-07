@@ -4,6 +4,7 @@ from datetime import datetime
 
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.mutable import MutableDict, MutableList
+from sqlalchemy.sql import func
 
 db = SQLAlchemy()
 
@@ -29,28 +30,27 @@ class User(db.Model):
     expert_response_alert = db.Column(db.Boolean, default=False)
     privacy_policy_agreed = db.Column(db.Boolean, default=False)
 
-    # 密碼
+    # 密碼處理
     def set_password(self, password):
         self.password = generate_password_hash(password)
 
     def check_password(self, password):
         return check_password_hash(self.password, password)
 
-    # 輸出格式
     def to_dict(self):
         return {
-            'user_id': self.user_id,
-            'account': self.account,
-            'username': self.username,
-            'email': self.email,
-            'phone': self.phone,
-            'news_category_subscription': self.news_category_subscription,
-            'expert_analysis_subscription': self.expert_analysis_subscription,
-            'weekly_report_subscription': self.weekly_report_subscription,
-            'fake_news_alert': self.fake_news_alert,
-            'trending_topic_alert': self.trending_topic_alert,
-            'expert_response_alert': self.expert_response_alert,
-            'privacy_policy_agreed': self.privacy_policy_agreed,
+            "user_id": self.user_id,
+            "account": self.account,
+            "username": self.username,
+            "email": self.email,
+            "phone": self.phone,
+            "news_category_subscription": self.news_category_subscription,
+            "expert_analysis_subscription": self.expert_analysis_subscription,
+            "weekly_report_subscription": self.weekly_report_subscription,
+            "fake_news_alert": self.fake_news_alert,
+            "trending_topic_alert": self.trending_topic_alert,
+            "expert_response_alert": self.expert_response_alert,
+            "privacy_policy_agreed": self.privacy_policy_agreed,
         }
 
 
@@ -106,14 +106,14 @@ class Comment(db.Model):
     __tablename__ = 'comments'
 
     comment_id = db.Column(db.Integer, primary_key=True)
-    article_id = db.Column(db.Integer, db.ForeignKey('articles.article_id'))
-    user_id = db.Column(db.Integer, db.ForeignKey('users.user_id'), nullable=True)
+    article_id = db.Column(db.Integer, db.ForeignKey("articles.article_id"))
+    user_id = db.Column(db.Integer, db.ForeignKey("users.user_id"), nullable=True)
 
     content = db.Column(db.Text, nullable=False)
     user_identity = db.Column(db.String(100), default="匿名用戶")
     commented_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-    user = db.relationship('User', backref=db.backref('comments', lazy=True))
+    user = db.relationship("User", backref=db.backref("comments", lazy=True))
 
     def to_dict(self):
         return {
@@ -152,17 +152,17 @@ class ChatHistory(db.Model):
 
     query_text = db.Column(db.Text, nullable=False)
 
-    # ⭐ dict → MutableDict + JSONB
     ai_acc_result = db.Column(MutableDict.as_mutable(JSONB), nullable=True)
     gemini_result = db.Column(MutableDict.as_mutable(JSONB), nullable=True)
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, server_default=func.now(), nullable=False)
 
-    # ⭐ list → MutableList + JSONB（續問才能正常 append）
+    # ⭐ conversation — 使用 MutableList(JSONB)
     conversation = db.Column(
         MutableList.as_mutable(JSONB),
         nullable=False,
-        default=list
+        default=list,        # Python 層
+        server_default="[]"  # DB 層 (PostgreSQL)
     )
 
     def to_dict(self):
@@ -172,6 +172,6 @@ class ChatHistory(db.Model):
             "query_text": self.query_text,
             "ai_acc_result": self.ai_acc_result,
             "gemini_result": self.gemini_result,
-            "created_at": self.created_at.isoformat(),
-            "conversation": self.conversation or []
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "conversation": self.conversation or [],
         }
