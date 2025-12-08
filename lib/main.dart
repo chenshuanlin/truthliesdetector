@@ -132,9 +132,6 @@ class _MainLayoutState extends State<MainLayout> {
   void initState() {
     super.initState();
 
-    // ========================================================
-    // 修正版：避免 Stream Listen 多次
-    // ========================================================
     if (!_overlaySubscribed) {
       _overlaySubscribed = true;
       FlutterOverlayWindow.overlayListener.listen((event) {
@@ -157,7 +154,7 @@ class _MainLayoutState extends State<MainLayout> {
   }
 
   // ======================
-  // 啟動懸浮球
+  // 懸浮球控制
   // ======================
   Future<void> _startGlobalFloatingBall() async {
     if (kIsWeb) return;
@@ -207,25 +204,59 @@ class _MainLayoutState extends State<MainLayout> {
     }
   }
 
+  // =====================================================
+  // ⭐⭐ 這裡是你要的 AppBar：空白 + 鈴鐺 icon（舊版 UI）
+  // =====================================================
+  PreferredSizeWidget _buildOldAppBar() {
+    return AppBar(
+      backgroundColor: AppColors.primaryGreen,
+      elevation: 0,
+      title: const Text(""), // 空白標題
+
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.notifications_none, color: Colors.white),
+          onPressed: () {
+            // 點鈴鐺→彈出選單控制懸浮球
+            showModalBottomSheet(
+              context: context,
+              builder: (_) {
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ListTile(
+                      leading: const Icon(Icons.bubble_chart),
+                      title: const Text("啟動懸浮球"),
+                      onTap: () {
+                        Navigator.pop(context);
+                        _startGlobalFloatingBall();
+                      },
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.close),
+                      title: const Text("關閉懸浮球"),
+                      onTap: () {
+                        Navigator.pop(context);
+                        _stopGlobalFloatingBall();
+                      },
+                    ),
+                  ],
+                );
+              },
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  // =====================================================
+  // Scaffold
+  // =====================================================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('真偽探測站'),
-        backgroundColor: AppColors.primaryGreen,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.bubble_chart),
-            tooltip: "啟動懸浮球",
-            onPressed: _startGlobalFloatingBall,
-          ),
-          IconButton(
-            icon: const Icon(Icons.close),
-            tooltip: "關閉懸浮球",
-            onPressed: _stopGlobalFloatingBall,
-          ),
-        ],
-      ),
+      appBar: _buildOldAppBar(), // ← 使用舊版 AppBar
 
       drawer: AppDrawer(
         mainGreen: AppColors.primaryGreen,
@@ -268,7 +299,7 @@ class _MainLayoutState extends State<MainLayout> {
 }
 
 // =========================================================
-// 自訂底部導航列
+// 自訂底部導航列（完全未修改）
 // =========================================================
 class CustomBottomNavBar extends StatelessWidget {
   final int currentIndex;

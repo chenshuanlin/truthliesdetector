@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -24,6 +25,8 @@ class _SearchPageState extends State<SearchPage> {
   String errorMessage = "";
   List<Map<String, dynamic>> articles = [];
 
+  Timer? _throttle; // ⭐ 節流器（Throttle）
+
   final List<String> allCategories = [
     "科技",
     "政治",
@@ -44,6 +47,14 @@ class _SearchPageState extends State<SearchPage> {
     "美食",
     "影視",
   ];
+
+  // ⭐ 節流版搜尋（500ms 內只允許一次）
+  void _triggerSearch() {
+    if (_throttle?.isActive ?? false) return; // 已在節流中 → 不執行
+    _throttle = Timer(const Duration(milliseconds: 500), () {
+      fetchArticles();
+    });
+  }
 
   // 從 Flask 撈資料
   Future<void> fetchArticles() async {
@@ -129,16 +140,15 @@ class _SearchPageState extends State<SearchPage> {
                 label: Text(option),
                 selected: isSelected,
                 selectedColor: mainGreen.withOpacity(0.3),
-                onSelected: (bool selectedValue) {
+                onSelected: (_) {
                   setState(() {
                     if (isSelected) {
-                      // ✅ 再次點擊可取消選取
                       onSelected("");
                     } else {
                       onSelected(option);
                     }
                   });
-                  fetchArticles();
+                  _triggerSearch(); // ⭐ 改成節流搜尋
                 },
               );
             }).toList(),
@@ -171,7 +181,6 @@ class _SearchPageState extends State<SearchPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 標題
               Text(
                 article["title"] ?? "",
                 style: const TextStyle(
@@ -180,8 +189,6 @@ class _SearchPageState extends State<SearchPage> {
                 ),
               ),
               const SizedBox(height: 6),
-
-              // 標籤 + 來源 + 時間
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -197,17 +204,15 @@ class _SearchPageState extends State<SearchPage> {
                     child: Text(
                       cred,
                       style: TextStyle(color: credColor, fontSize: 12),
-                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      "${article["media_name"] ?? "未知來源"}・${article["published_time"] ?? ""}",
+                      "${article["media_name"] ?? "未知"}・${article["published_time"] ?? ""}",
                       style: const TextStyle(color: Colors.grey, fontSize: 12),
-                      textAlign: TextAlign.right,
                       overflow: TextOverflow.ellipsis,
                       maxLines: 1,
+                      textAlign: TextAlign.right,
                     ),
                   ),
                 ],
@@ -222,7 +227,7 @@ class _SearchPageState extends State<SearchPage> {
   @override
   void initState() {
     super.initState();
-    fetchArticles();
+    _triggerSearch(); // ⭐ init 也走節流，避免瞬間重建觸發多次 API
   }
 
   @override
@@ -257,7 +262,7 @@ class _SearchPageState extends State<SearchPage> {
                         hintText: "搜尋關鍵字",
                         border: InputBorder.none,
                       ),
-                      onSubmitted: (_) => fetchArticles(),
+                      onSubmitted: (_) => _triggerSearch(), // ⭐ 使用節流搜尋
                     ),
                   ),
                 ],
@@ -285,7 +290,6 @@ class _SearchPageState extends State<SearchPage> {
               (val) => selectedCategory = val,
             ),
 
-            // 更多按鈕
             Align(
               alignment: Alignment.centerLeft,
               child: TextButton.icon(
@@ -294,10 +298,8 @@ class _SearchPageState extends State<SearchPage> {
                 label: Text(showMore ? "收起" : "更多"),
               ),
             ),
-
             const SizedBox(height: 10),
 
-            // 結果標題
             Row(
               children: [
                 const Text(
@@ -313,7 +315,6 @@ class _SearchPageState extends State<SearchPage> {
             ),
             const SizedBox(height: 8),
 
-            // 結果列表
             Expanded(
               child: isLoading
                   ? const Center(child: CircularProgressIndicator())
@@ -323,9 +324,8 @@ class _SearchPageState extends State<SearchPage> {
                   ? const Center(child: Text("目前沒有符合的文章"))
                   : ListView.builder(
                       itemCount: articles.length,
-                      itemBuilder: (context, index) {
-                        return _buildArticleCard(articles[index]);
-                      },
+                      itemBuilder: (context, index) =>
+                          _buildArticleCard(articles[index]),
                     ),
             ),
           ],

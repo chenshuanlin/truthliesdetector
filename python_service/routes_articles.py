@@ -128,54 +128,71 @@ def get_ranking_articles():
 
 
 # ============================================================
-# 🔍 搜尋文章（給 Flutter 搜尋頁）
+# 🔍 搜尋文章（穩定版 + 防呆）
 # ============================================================
 @bp.route("/articles/search", methods=["GET"])
 def search_articles():
     try:
-        keyword = request.args.get("keyword", "").strip()
-        category = request.args.get("category", "").strip()
-        confidence = request.args.get("confidence", "").strip()
-        time_filter = request.args.get("time_filter", "").strip()
+        # 取得參數（避免 None 和空字串）
+        keyword = (request.args.get("keyword") or "").strip()
+        category = (request.args.get("category") or "").strip()
+        confidence = (request.args.get("confidence") or "").strip()
+        time_filter = (request.args.get("time_filter") or "").strip()
 
-        # SQL 組合條件
+        # SQL 條件
         conditions = []
         params = {}
 
+        # 🔎 關鍵字搜尋
         if keyword:
             conditions.append("(title ILIKE :kw OR content ILIKE :kw)")
             params["kw"] = f"%{keyword}%"
+
+        # 🔎 類別搜尋
         if category:
             conditions.append("category ILIKE :cat")
             params["cat"] = f"%{category}%"
 
+        # 🔎 可信度數字 mapping
         if confidence:
             score = next((k for k, v in SCORE_LABELS.items() if v == confidence), None)
             if score is not None:
                 conditions.append("reliability_score = :score")
                 params["score"] = score
 
+        # 🔎 時間篩選
+        now = datetime.now()
         if time_filter == "今天":
-            conditions.append("published_time >= :start_time")
-            params["start_time"] = datetime.now().replace(hour=0, minute=0, second=0)
-        elif time_filter == "本週":
-            conditions.append("published_time >= :start_time")
-            params["start_time"] = datetime.now() - timedelta(days=7)
-        elif time_filter == "本月":
-            conditions.append("published_time >= :start_time")
-            params["start_time"] = datetime.now() - timedelta(days=30)
+            conditions.append("published_time >= :t")
+            params["t"] = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
+        elif time_filter == "本週":
+            conditions.append("published_time >= :t")
+            params["t"] = now - timedelta(days=7)
+
+        elif time_filter == "本月":
+            conditions.append("published_time >= :t")
+            params["t"] = now - timedelta(days=30)
+
+        # ➜ 沒有條件 → WHERE TRUE
         where_clause = " AND ".join(conditions) if conditions else "TRUE"
 
+        # ======================================================
+        # 執行查詢
+        # ======================================================
         query = text(f"""
-            SELECT article_id, title, category, media_name, published_time, reliability_score, source_link
+            SELECT article_id, title, category, media_name, published_time,
+                   reliability_score, source_link
             FROM articles
             WHERE {where_clause}
             ORDER BY published_time DESC;
         """)
-        result = db.session.execute(query, params)
-        rows = result.fetchall()
 
+        rows = db.session.execute(query, params).fetchall()
+
+        # ======================================================
+        # 格式化結果
+        # ======================================================
         articles = []
         for r in rows:
             articles.append({
@@ -194,6 +211,7 @@ def search_articles():
     except Exception as e:
         print("❌ 搜尋文章失敗:", e)
         return jsonify({"error": str(e)}), 500
+
 
 
 # ============================================================
