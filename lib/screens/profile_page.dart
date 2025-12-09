@@ -38,9 +38,9 @@ class _ProfilePageState extends State<ProfilePage> {
     '美食',
     '影視',
   ];
+
   final selected = <String>{'科技', '健康', '社會'};
 
-  // 🔹 編輯用的 controller
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
@@ -107,7 +107,6 @@ class _ProfilePageState extends State<ProfilePage> {
             ),
             ElevatedButton(
               onPressed: () async {
-                // 顯示載入指示器
                 showDialog(
                   context: context,
                   barrierDismissible: false,
@@ -124,42 +123,24 @@ class _ProfilePageState extends State<ProfilePage> {
                         : _phoneController.text,
                   );
 
-                  // 關閉載入指示器
                   if (mounted) Navigator.pop(context);
-                  // 關閉編輯對話框
                   if (mounted) Navigator.pop(context);
 
-                  if (success) {
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('資料更新成功！'),
-                          backgroundColor: Colors.green,
-                        ),
-                      );
-                    }
-                  } else {
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('更新失敗，請稍後再試'),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                    }
-                  }
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(success ? '資料更新成功！' : '更新失敗，請稍後再試'),
+                      backgroundColor: success ? Colors.green : Colors.red,
+                    ),
+                  );
                 } catch (e) {
-                  // 關閉載入指示器
                   if (mounted) Navigator.pop(context);
 
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('更新失敗：$e'),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
-                  }
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('更新失敗：$e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
                 }
               },
               style: ElevatedButton.styleFrom(
@@ -180,7 +161,6 @@ class _ProfilePageState extends State<ProfilePage> {
       builder: (context, userProvider, child) {
         final user = userProvider.currentUser;
 
-        // 如果沒有登入，顯示登入提示
         if (!userProvider.isLoggedIn || user == null) {
           return const Center(
             child: Column(
@@ -188,10 +168,7 @@ class _ProfilePageState extends State<ProfilePage> {
               children: [
                 Icon(Icons.person_off, size: 64, color: Colors.grey),
                 SizedBox(height: 16),
-                Text(
-                  '請先登入',
-                  style: TextStyle(fontSize: 18, color: Colors.grey),
-                ),
+                Text('請先登入', style: TextStyle(fontSize: 18)),
               ],
             ),
           );
@@ -199,11 +176,13 @@ class _ProfilePageState extends State<ProfilePage> {
 
         return Column(
           children: [
-            // 頂部曲線背景
+            // -----------------------------------------------
+            // ⭐ 頂部區塊（已移除 Logo，並縮短空白）
+            // -----------------------------------------------
             Stack(
               children: [
                 Container(
-                  height: 180,
+                  height: 150,
                   decoration: const BoxDecoration(
                     color: _sage,
                     borderRadius: BorderRadius.only(
@@ -212,26 +191,10 @@ class _ProfilePageState extends State<ProfilePage> {
                     ),
                   ),
                 ),
-                SafeArea(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                    child: Row(
-                      children: [
-                        const Spacer(),
-                        Image.asset(
-                          'lib/assets/logo.png',
-                          width: 45,
-                          height: 45,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+
+                // ⭐ 把 user 資訊往上提：top = 40（原本 80）
                 Positioned(
-                  top: 80,
+                  top: 40,
                   left: 16,
                   right: 16,
                   child: Row(
@@ -283,7 +246,7 @@ class _ProfilePageState extends State<ProfilePage> {
                         ),
                       ),
                       TextButton(
-                        onPressed: _editProfile, // 🔹 打開編輯對話框
+                        onPressed: _editProfile,
                         style: TextButton.styleFrom(
                           foregroundColor: Colors.white,
                         ),
@@ -295,165 +258,166 @@ class _ProfilePageState extends State<ProfilePage> {
               ],
             ),
 
-            // 主體內容
+            // -----------------------------------------------
+            // ⭐ 主內容區：SafeArea + padding 修正底部遮擋
+            // -----------------------------------------------
             Expanded(
-              child: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  // 帳號資訊卡片
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '帳號資訊',
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
-                          const SizedBox(height: 12),
-                          _InfoRow(label: '帳號', value: user.account),
-                          _InfoRow(label: '用戶名稱', value: user.username),
-                          _InfoRow(label: '電子郵件', value: user.email),
-                          if (user.phone != null && user.phone!.isNotEmpty)
-                            _InfoRow(label: '電話', value: user.phone!),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // 興趣標籤
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '興趣標籤',
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              for (final t in tags)
-                                ChoiceChip(
-                                  label: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      if (selected.contains(t)) ...[
-                                        const Icon(
-                                          Icons.check,
-                                          size: 16, // 細版勾勾
-                                          color: Colors.white, // ✅ 改成白色
-                                        ),
-                                        const SizedBox(width: 4),
-                                      ],
-                                      Text(t),
-                                    ],
-                                  ),
-                                  labelStyle: TextStyle(
-                                    color: selected.contains(t)
-                                        ? Colors.white
-                                        : _sage,
-                                    height: 1.2,
-                                  ),
-                                  labelPadding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 2,
-                                  ),
-                                  selected: selected.contains(t),
-                                  showCheckmark: false, // ❌ 關掉預設黑勾
-                                  selectedColor: _sageDeep,
-                                  backgroundColor: Colors.white,
-                                  side: const BorderSide(color: _sage),
-                                  onSelected: (_) {
-                                    setState(() {
-                                      if (selected.contains(t)) {
-                                        selected.remove(t);
-                                      } else {
-                                        selected.add(t);
-                                      }
-                                    });
-                                  },
-                                ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  _NavTile(
-                    title: '收藏文章',
-                    subtitle: '管理你收藏的新聞與文章',
-                    onTap: () =>
-                        Navigator.pushNamed(context, CollectPage.route),
-                  ),
-                  _NavTile(
-                    title: '瀏覽歷史',
-                    subtitle: '查看你的瀏覽記錄',
-                    onTap: () =>
-                        Navigator.pushNamed(context, HistoryPage.route),
-                  ),
-                  _NavTile(
-                    title: '通知設定',
-                    subtitle: '管理訂閱與提醒設定',
-                    onTap: () =>
-                        Navigator.pushNamed(context, SettingsPage.route),
-                  ),
-
-                  const SizedBox(height: 8),
-                  // 登出按鈕（#D85E5E）
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFD85E5E),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                    onPressed: () async {
-                      // 顯示確認對話框
-                      final shouldLogout = await showDialog<bool>(
-                        context: context,
-                        builder: (context) => AlertDialog(
-                          title: const Text('確認登出'),
-                          content: const Text('您確定要登出嗎？'),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(context, false),
-                              child: const Text('取消'),
+              child: SafeArea(
+                top: false,
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+                  children: [
+                    // 帳號資訊
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '帳號資訊',
+                              style: Theme.of(context).textTheme.titleMedium,
                             ),
-                            ElevatedButton(
-                              onPressed: () => Navigator.pop(context, true),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFFD85E5E),
-                              ),
-                              child: const Text('登出'),
+                            const SizedBox(height: 12),
+                            _InfoRow(label: '帳號', value: user.account),
+                            _InfoRow(label: '用戶名稱', value: user.username),
+                            _InfoRow(label: '電子郵件', value: user.email),
+                            if (user.phone != null && user.phone!.isNotEmpty)
+                              _InfoRow(label: '電話', value: user.phone!),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // 興趣標籤
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '興趣標籤',
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                for (final t in tags)
+                                  ChoiceChip(
+                                    label: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        if (selected.contains(t)) ...[
+                                          const Icon(
+                                            Icons.check,
+                                            size: 16,
+                                            color: Colors.white,
+                                          ),
+                                          const SizedBox(width: 4),
+                                        ],
+                                        Text(t),
+                                      ],
+                                    ),
+                                    labelStyle: TextStyle(
+                                      color: selected.contains(t)
+                                          ? Colors.white
+                                          : _sage,
+                                    ),
+                                    selected: selected.contains(t),
+                                    showCheckmark: false,
+                                    selectedColor: _sageDeep,
+                                    backgroundColor: Colors.white,
+                                    side: const BorderSide(color: _sage),
+                                    onSelected: (_) {
+                                      setState(() {
+                                        selected.contains(t)
+                                            ? selected.remove(t)
+                                            : selected.add(t);
+                                      });
+                                    },
+                                  ),
+                              ],
                             ),
                           ],
                         ),
-                      );
+                      ),
+                    ),
 
-                      if (shouldLogout == true) {
-                        await userProvider.logout();
-                        if (mounted) {
-                          Navigator.pushReplacementNamed(
-                            context,
-                            SplashPage.route,
-                          );
+                    const SizedBox(height: 8),
+
+                    // 導覽
+                    _NavTile(
+                      title: '收藏文章',
+                      subtitle: '管理你收藏的新聞與文章',
+                      onTap: () =>
+                          Navigator.pushNamed(context, CollectPage.route),
+                    ),
+                    _NavTile(
+                      title: '瀏覽歷史',
+                      subtitle: '查看你的瀏覽記錄',
+                      onTap: () =>
+                          Navigator.pushNamed(context, HistoryPage.route),
+                    ),
+                    _NavTile(
+                      title: '通知設定',
+                      subtitle: '管理訂閱與提醒設定',
+                      onTap: () =>
+                          Navigator.pushNamed(context, SettingsPage.route),
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    // 登出按鈕
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFD85E5E),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      onPressed: () async {
+                        final shouldLogout = await showDialog<bool>(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: const Text('確認登出'),
+                            content: const Text('您確定要登出嗎？'),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, false),
+                                child: const Text('取消'),
+                              ),
+                              ElevatedButton(
+                                onPressed: () => Navigator.pop(context, true),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFFD85E5E),
+                                ),
+                                child: const Text('登出'),
+                              ),
+                            ],
+                          ),
+                        );
+
+                        if (shouldLogout == true) {
+                          await userProvider.logout();
+                          if (mounted) {
+                            Navigator.pushReplacementNamed(
+                              context,
+                              SplashPage.route,
+                            );
+                          }
                         }
-                      }
-                    },
-                    child: const Text('登出'),
-                  ),
-                ],
+                      },
+                      child: const Text('登出'),
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
@@ -474,7 +438,6 @@ class _InfoRow extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
             width: 80,

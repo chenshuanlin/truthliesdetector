@@ -40,7 +40,7 @@ class ApiService {
   }
 
   // ===================================================================
-  // 2. Register
+  // 2. Register（* 修正重點：201 是成功 *）
   // ===================================================================
   Future<String> register(User user) async {
     final resp = await http.post(
@@ -55,8 +55,12 @@ class ApiService {
       }),
     );
 
-    if (resp.statusCode == 200) return 'success';
+    // ⭐ 後端成功會回 201 Created
+    if (resp.statusCode == 201 || resp.statusCode == 200) {
+      return 'success';
+    }
 
+    // 若後端回傳 error JSON
     try {
       final data = jsonDecode(resp.body);
       return data['error'] ?? '註冊失敗';
@@ -73,8 +77,9 @@ class ApiService {
     final resp = await http.get(url);
 
     if (resp.statusCode == 200) {
-      final data = jsonDecode(resp.body);
-      return _userFromMap(data['user']);
+      final map = jsonDecode(resp.body);
+      if (map['user'] == null) return null;
+      return _userFromMap(map['user']);
     }
     return null;
   }
@@ -99,7 +104,6 @@ class ApiService {
       final data = jsonDecode(resp.body);
       return data['ok'] == true || data['success'] == true;
     }
-
     return false;
   }
 
