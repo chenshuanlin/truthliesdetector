@@ -22,17 +22,14 @@ class Message {
 }
 
 class AIchat extends StatefulWidget {
-  /// 1️⃣ 新聊天必填的初始問題
   final String initialQuery;
-
-  /// 2️⃣ 拍照查證用（可為 null）
   final Uint8List? capturedImageBytes;
 
-  /// 3️⃣ 歷史紀錄回顧用（可為 null）
+  // 歷史紀錄回顧
   final int? sessionId;
-  final List<dynamic>? existingConversation; // DB 的 conversation
-  final String? createdAt; // 建立時間（目前只是備用）
-  final String? title; // 查證標題（目前只是備用）
+  final List<dynamic>? existingConversation;
+  final String? createdAt;
+  final String? title;
 
   static const String route = "/aichat";
 
@@ -64,25 +61,38 @@ class _AIchatState extends State<AIchat> {
   void initState() {
     super.initState();
 
-    // ⭐ 如果有帶 sessionId + conversation 進來 → 歷史回顧模式
     if (widget.sessionId != null && widget.existingConversation != null) {
       _loadFromHistory();
     } else {
-      // ⭐ 一般新查證模式 → call /chat/start
       _startSession();
     }
   }
 
   // ============================================================
-  // A. 從歷史紀錄載入（不打 /chat/start）
+  // A. 從歷史紀錄載入（最完整修正版）
   // ============================================================
   void _loadFromHistory() {
     print("📜 從歷史紀錄載入對話，sessionId = ${widget.sessionId}");
-
     _sessionId = widget.sessionId;
 
     final List<dynamic> conv = widget.existingConversation ?? [];
 
+    // ❗ conversation 若為空 → 避免 UI 空白
+    if (conv.isEmpty) {
+      print("⚠️ 這筆紀錄是空的 conversation");
+      _messages.add(
+        Message(
+          text: "（此查證紀錄沒有內容可顯示）",
+          sender: "system",
+          timestamp: DateTime.now(),
+        ),
+      );
+      setState(() {});
+      _scrollDown();
+      return;
+    }
+
+    // 正常載入 conversation
     for (final item in conv) {
       if (item is! Map) continue;
 
@@ -105,10 +115,10 @@ class _AIchatState extends State<AIchat> {
   }
 
   // ============================================================
-  // B. 新聊天：建立 Session — /chat/start
+  // B. 新對話建立 Session — /chat/start
   // ============================================================
   Future<void> _startSession() async {
-    print("🚀 開始建立新 Session...");
+    print("🚀 建立新 Session...");
 
     final userId = Provider.of<UserProvider>(
       context,
@@ -135,11 +145,11 @@ class _AIchatState extends State<AIchat> {
       );
 
       print("📥 /chat/start 回應：${resp.body}");
-
       final data = jsonDecode(resp.body);
+
       _sessionId = data["session_id"];
 
-      // user 初始訊息
+      // 使用者訊息
       _messages.add(
         Message(
           text: widget.initialQuery,
@@ -149,7 +159,7 @@ class _AIchatState extends State<AIchat> {
         ),
       );
 
-      // system 可信度
+      // System（可信度）
       if (data["ai_acc_result"] != null) {
         final level = data["ai_acc_result"]["level"] ?? "未知";
         final score = data["ai_acc_result"]["score"] ?? 0;
@@ -181,11 +191,9 @@ class _AIchatState extends State<AIchat> {
   // ============================================================
   Future<void> _sendAppend(String text) async {
     if (_sessionId == null) {
-      print("❌ session_id 為 null，無法 append");
+      print("❌ session_id 為 null");
       return;
     }
-
-    print("📤 傳送 /chat/append：$text");
 
     final url = "$apiBase/chat/append";
     final body = {"session_id": _sessionId, "message": text};
@@ -198,8 +206,8 @@ class _AIchatState extends State<AIchat> {
       );
 
       print("📥 /chat/append 回應：${resp.body}");
-
       final data = jsonDecode(resp.body);
+
       final reply = data["reply"] ?? "(AI 無回覆)";
 
       _messages.add(
@@ -220,8 +228,6 @@ class _AIchatState extends State<AIchat> {
     final txt = _controller.text.trim();
     if (txt.isEmpty) return;
 
-    print("💬 使用者送出：$txt");
-
     _messages.add(
       Message(text: txt, sender: "user", timestamp: DateTime.now()),
     );
@@ -233,7 +239,6 @@ class _AIchatState extends State<AIchat> {
     _sendAppend(txt);
   }
 
-  // 自動捲動到底部
   void _scrollDown() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scroll.hasClients) {
@@ -281,7 +286,7 @@ class _AIchatState extends State<AIchat> {
   }
 
   // ============================================================
-  // 對話訊息泡泡
+  // 氣泡
   // ============================================================
   Widget _bubble(Message msg) {
     final isUser = msg.sender == "user";
@@ -335,7 +340,7 @@ class _AIchatState extends State<AIchat> {
   }
 
   // ============================================================
-  // 底部輸入區
+  // 底部輸入列
   // ============================================================
   Widget _inputBar() {
     return Container(

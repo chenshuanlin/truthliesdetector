@@ -163,7 +163,7 @@ def chat_append():
 
 
 # ======================================================
-# 3️⃣ /chat/recent — 歷史查詢（完整修正版）
+# 3️⃣ /chat/recent — 最新查證紀錄（不回傳 conversation）
 # ======================================================
 @chat_bp.route("/chat/recent", methods=["GET"])
 def chat_recent():
@@ -185,16 +185,27 @@ def chat_recent():
         results = []
         for r in rows:
             try:
+                ai_acc = safe_json(r.ai_acc_result)
+                gemini = safe_json(r.gemini_result)
+
+                # ⭐ 從 gemini_result 中取出摘要，不要整段內容
+                short_summary = None
+                if gemini and isinstance(gemini, dict):
+                    full_reply = gemini.get("reply", "")
+                    short_summary = full_reply[:120] + "..." if len(full_reply) > 120 else full_reply
+
                 results.append({
                     "id": r.id,
                     "query_text": r.query_text,
                     "created_at": r.created_at.isoformat(),
-                    "ai_acc_result": safe_json(r.ai_acc_result),
-                    "gemini_result": safe_json(r.gemini_result),
-                    "conversation": safe_json(r.conversation),
+                    "ai_acc_result": ai_acc,
+                    "summary": short_summary,         # ⭐ 只回傳簡短摘要
+                    "conversation": None,             # 🚫 不回傳整段對話（避免爆炸）
+                    "gemini_result": None,            # 🚫 不回傳超大量文字
                 })
+
             except Exception as e:
-                logging.error("⚠ 單筆 chat_history 壞掉:", exc_info=True)
+                logging.error("⚠ recent 單筆資料壞掉:", exc_info=True)
                 continue
 
         return jsonify({"records": results, "status": "ok"})

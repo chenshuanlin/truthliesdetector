@@ -214,7 +214,7 @@ def register_image_route(app):
 
 
 # =====================================================================
-# Main Entry
+# Main Entry（唯一需要的改動）
 # =====================================================================
 if __name__ == "__main__":
     app = create_app()
@@ -228,4 +228,5 @@ if __name__ == "__main__":
         except Exception as e:
             logging.error(f"資料庫錯誤: {e}")
 
+    # ⭐ 這裡是你要的唯一改動：讓「手機」能連 Flask API
     app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=False)
