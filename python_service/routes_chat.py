@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-import logging
+import logging, json
 from datetime import datetime
 
 from models import db, ChatHistory
@@ -7,11 +7,24 @@ from core.text_analyzer import analyze_text
 from core.gemini_client import ask_gemini_chat
 from core.database import (
     insert_chat_session,
-    append_chat_conversation,
-    get_recent_chat_sessions
+    append_chat_conversation
 )
 
 chat_bp = Blueprint("chat_routes", __name__)
+
+
+# ======================================================
+# 🔧 安全 JSON 處理：資料壞掉也不會 crash
+# ======================================================
+def safe_json(data):
+    if data is None:
+        return None
+    try:
+        if isinstance(data, str):
+            return json.loads(data)
+        return data
+    except Exception:
+        return None
 
 
 # ======================================================
@@ -43,9 +56,7 @@ def chat_start():
         gemini_result = {
             "mode": "verify",
             "reply": reply,
-            "scores": {
-                "combined": {"score": score, "level": level},
-            },
+            "scores": {"combined": {"score": score, "level": level}},
         }
 
         # ---- Step3: 建立 conversation ----
@@ -65,13 +76,6 @@ def chat_start():
             conversation=conversation,
         )
 
-        # ⭐⭐⭐ 立刻 refresh，避免後續 SELECT 造成 ROLLBACK
-        if session_id:
-            obj = db.session.get(ChatHistory, session_id)
-            if obj:
-                db.session.flush()
-                db.session.refresh(obj)
-
         return jsonify({
             "session_id": session_id,
             "reply": reply,
@@ -82,7 +86,6 @@ def chat_start():
     except Exception as e:
         logging.error(f"/chat/start error: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
-
 
 
 # ======================================================
@@ -105,8 +108,9 @@ def chat_append():
         if not session:
             return jsonify({"error": "session not found"}), 404
 
-        if not isinstance(session.conversation, list):
-            session.conversation = []
+        history = safe_json(session.conversation) or []
+        if not isinstance(history, list):
+            history = []
 
         # ---- Step1: append user ----
         user_msg = {
@@ -118,7 +122,7 @@ def chat_append():
 
         # ---- Step2: Gemini 上下文 ----
         context_list = []
-        for c in session.conversation:
+        for c in history:
             role = "user" if c.get("sender") == "user" else "model"
             context_list.append({"role": role, "parts": [{"text": c.get("text", "")}]})
 
@@ -151,12 +155,6 @@ def chat_append():
             }
         )
 
-        # ⭐ refresh
-        obj = db.session.get(ChatHistory, session_id)
-        if obj:
-            db.session.flush()
-            db.session.refresh(obj)
-
         return jsonify({"reply": reply})
 
     except Exception as e:
@@ -164,9 +162,8 @@ def chat_append():
         return jsonify({"error": str(e)}), 500
 
 
-
 # ======================================================
-# 3️⃣ /chat/recent — 歷史查詢
+# 3️⃣ /chat/recent — 歷史查詢（完整修正版）
 # ======================================================
 @chat_bp.route("/chat/recent", methods=["GET"])
 def chat_recent():
@@ -174,8 +171,33 @@ def chat_recent():
         user_id = request.args.get("user_id", type=int)
         limit = request.args.get("limit", 5, type=int)
 
-        rows = get_recent_chat_sessions(user_id, limit)
-        return jsonify({"records": rows, "status": "ok"})
+        if not user_id:
+            return jsonify({"error": "missing user_id"}), 400
+
+        rows = (
+            db.session.query(ChatHistory)
+            .filter_by(user_id=user_id)
+            .order_by(ChatHistory.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+
+        results = []
+        for r in rows:
+            try:
+                results.append({
+                    "id": r.id,
+                    "query_text": r.query_text,
+                    "created_at": r.created_at.isoformat(),
+                    "ai_acc_result": safe_json(r.ai_acc_result),
+                    "gemini_result": safe_json(r.gemini_result),
+                    "conversation": safe_json(r.conversation),
+                })
+            except Exception as e:
+                logging.error("⚠ 單筆 chat_history 壞掉:", exc_info=True)
+                continue
+
+        return jsonify({"records": results, "status": "ok"})
 
     except Exception as e:
         logging.error(f"/chat/recent error: {e}", exc_info=True)
