@@ -1,9 +1,5 @@
 # =====================================================================
-# gemini_client.py —— 最終完整修正版（2025）
-# 使用你的 Google ListModels 實際可用模型：
-#  - models/gemini-2.5-flash  ←（建議預設）
-#  - models/gemini-2.0-flash
-#  - models/gemini-2.0-flash-lite
+# gemini_client.py —— 最終「快速啟動」無 ListModels 版（2025）
 # =====================================================================
 
 import os
@@ -11,9 +7,6 @@ import logging
 import google.generativeai as genai
 from google.api_core.exceptions import ResourceExhausted
 
-# ---------------------------------------------------------
-# DEBUG：顯示實際載入路徑
-# ---------------------------------------------------------
 print("🔍 [DEBUG] gemini_client loaded from:", __file__)
 
 # ---------------------------------------------------------
@@ -26,78 +19,47 @@ else:
     genai.configure(api_key=API_KEY)
 
 # ---------------------------------------------------------
-# 🔥 使用你 ListModels 裡真正存在的模型
-# （這些模型全部出現在你貼的 API 回傳列表）
+# ✔ 直接指定模型（不再 ListModels）
 # ---------------------------------------------------------
-MODEL_CANDIDATES = [
-    "models/gemini-2.5-flash",       # 🚀 最推薦（免費 / 新版 / 穩定）
-    "models/gemini-2.0-flash",       # 備用
-    "models/gemini-2.0-flash-lite",  # 最省額度
-]
+DEFAULT_MODEL_NAME = "models/gemini-2.5-flash"   # ← 最推薦（快／便宜／精準）
 
-
-def load_models():
-    """讀取可用模型並列出 Google ListModels 結果"""
-    models = []
-
-    # 顯示 Google API 回傳模型清單
-    try:
-        print("\n📌 [DEBUG] Google ListModels 回傳：")
-        available = genai.list_models()
-        for m in available:
-            print("  -", m.name)
-        print("\n")
-    except Exception as e:
-        print("❌ [DEBUG] 無法讀取 ListModels：", e)
-
-    # 測試候選模型是否可用
-    for name in MODEL_CANDIDATES:
-        try:
-            m = genai.GenerativeModel(name)
-            models.append(m)
-            logging.info(f"✅ 模型可用：{name}")
-        except Exception as e:
-            logging.warning(f"⚠️ 模型不可用：{name} → {e}")
-
-    return models
-
-
-AVAILABLE_MODELS = load_models()
-if not AVAILABLE_MODELS:
-    logging.error("❌ 沒有找到任何可用模型（請檢查 API Key 或額度）。")
+try:
+    MODEL = genai.GenerativeModel(DEFAULT_MODEL_NAME)
+    print(f"✅ 已載入 Gemini 模型：{DEFAULT_MODEL_NAME}")
+except Exception as e:
+    print(f"❌ 無法載入模型：{e}")
+    MODEL = None
 
 
 # ---------------------------------------------------------
 # 單輪查詢
 # ---------------------------------------------------------
 def ask_gemini(prompt: str) -> str:
-    if not AVAILABLE_MODELS:
+    if not MODEL:
         return "⚠️ Gemini 模型不可用"
 
-    for model in AVAILABLE_MODELS:
-        try:
-            resp = model.generate_content(prompt)
-            return getattr(resp, "text", "").strip() or "⚠️ 無法取得回覆"
+    try:
+        resp = MODEL.generate_content(prompt)
+        return getattr(resp, "text", "").strip() or "⚠️ 無法取得回覆"
 
-        except ResourceExhausted:
-            logging.error(f"❌ 模型額度耗盡：{model.model_name}")
-            continue
+    except ResourceExhausted:
+        return "⚠️ 帳號額度已用完，請稍後再試。"
 
-        except Exception as e:
-            logging.error(f"❌ Gemini 錯誤：{e}")
-
-    return "⚠️ 查證時發生錯誤。"
+    except Exception as e:
+        logging.error(f"Gemini 錯誤：{e}")
+        return "⚠️ 查詢時發生錯誤。"
 
 
 # ---------------------------------------------------------
 # 多輪查證 Chat
 # ---------------------------------------------------------
 def ask_gemini_chat(message: str, history: list) -> str:
-    if not AVAILABLE_MODELS:
+    if not MODEL:
         return "⚠️ Gemini 模型不可用"
 
-    # 整理對話格式
     msgs = []
+
+    # 整理多輪對話格式
     for h in history:
         try:
             msgs.append({
@@ -109,18 +71,14 @@ def ask_gemini_chat(message: str, history: list) -> str:
 
     msgs.append({"role": "user", "parts": [{"text": message}]})
 
-    # 嘗試所有模型直到成功
-    for model in AVAILABLE_MODELS:
-        try:
-            resp = model.generate_content(msgs)
-            reply = getattr(resp, "text", "").strip()
-            return reply or "⚠️ 暫時無法取得回覆"
+    try:
+        resp = MODEL.generate_content(msgs)
+        reply = getattr(resp, "text", "").strip()
+        return reply or "⚠️ 暫時無法取得回覆"
 
-        except ResourceExhausted:
-            logging.error(f"❌ 模型額度不足：{model.model_name} → 換下一個")
-            continue
+    except ResourceExhausted:
+        return "⚠️ 數據額度不足，請稍後再試。"
 
-        except Exception as e:
-            logging.error(f"Gemini Chat 錯誤：{e}", exc_info=True)
-
-    return "⚠️ 查證功能目前額度不足，請稍後再試。"
+    except Exception as e:
+        logging.error(f"Gemini Chat 錯誤：{e}", exc_info=True)
+        return "⚠️ 查證功能遇到錯誤。"

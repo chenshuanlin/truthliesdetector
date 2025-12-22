@@ -533,7 +533,14 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
         else
           ..._comments.map(
             (c) => ListTile(
-              leading: const CircleAvatar(child: Icon(Icons.person)),
+              leading: CircleAvatar(
+                backgroundColor:
+                    (c['author'] != null &&
+                        c['author'].toString().contains('專家'))
+                    ? Colors.lightBlue
+                    : null, // ← 非專家完全不設定顏色（使用預設）
+                child: const Icon(Icons.person, color: Colors.white),
+              ),
               title: Text(c['author'] ?? '匿名用戶'),
               subtitle: Text(c['content'] ?? ''),
               trailing: Text(

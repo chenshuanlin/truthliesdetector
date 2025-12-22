@@ -422,7 +422,7 @@ class _AiReportPageState extends State<AiReportPage> {
       children: [
         /// 1. 柱狀圖
         _buildVisualCard(
-          title: '本週假訊息監測報告',
+          title: '本週假訊息監測量',
           onViewAll: () => _showFullReportModal(),
           child: AiBarChart(data: weeklyData),
         ),
